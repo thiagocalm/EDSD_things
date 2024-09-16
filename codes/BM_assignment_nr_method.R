@@ -2,7 +2,7 @@
 #' @course Basic Math
 #' @activity Assignment 1
 #' @place MPIDR
-#' @date 2024-09-13
+#' @date 2024-09-16
 #' @goal Apply Newton-Raphson's method for a empirical situation
 #' @description The empirical situation selected was the exercise 33 of chapter 4 (STEWART, 2003)
 #' -----------------------------------------------------------------------------------------------
@@ -72,10 +72,10 @@ nr_method <- function(x, f_x_func,d_fx_func){
       y = "Input values",
       x = "Tries"
     ) +
-    scale_x_continuous(breaks = seq(0,length(tries),5)) +
+    scale_x_continuous(breaks = seq(0,length(tries),2)) +
     theme_minimal() +
     theme(
-      plot.title = element_text(, size = 20),
+      plot.title = element_text(size = 20),
       axis.title = element_text(face = "bold", size = 14, vjust = .5, hjust = 1),
       axis.text = element_text(size = 11, vjust = .5, hjust = .5)
     )
@@ -92,7 +92,7 @@ nr_method <- function(x, f_x_func,d_fx_func){
       y = "Input values",
       x = "Tries"
     ) +
-    scale_x_continuous(breaks = seq(0,length(tries),5)) +
+    scale_x_continuous(breaks = seq(0,length(tries),2)) +
     theme_minimal() +
     theme(
       plot.title = element_text(size = 20),
@@ -112,7 +112,7 @@ nr_method <- function(x, f_x_func,d_fx_func){
       y = "Results",
       x = "Tries"
     ) +
-    scale_x_continuous(breaks = seq(0,length(results),5)) +
+    scale_x_continuous(breaks = seq(0,length(results),2)) +
     theme_minimal() +
     theme(
       plot.title = element_text(size = 20),
@@ -132,7 +132,7 @@ nr_method <- function(x, f_x_func,d_fx_func){
       y = "Results",
       x = "Tries"
     ) +
-    scale_x_continuous(breaks = seq(0,length(tries),5)) +
+    scale_x_continuous(breaks = seq(0,length(tries),2)) +
     theme_minimal() +
     theme(
       plot.title = element_text(size = 20),
@@ -198,3 +198,32 @@ result0$fig_final_total
 
 result_0$results %>% slice(length(result_0$results$tries))
 result_0$fig_final_total
+
+# Example of the presentation ---------------------------------------------
+
+# Imput functions
+f_x_func = function(x) {-(1+x)^15 + 12*x * (1+x)^15 + 1}
+d_fx_func = function(x) {(-15 * (1+x)^14) + (12 * (1+x)^15) + (12 * x * 15 * (1 + x)^14)}
+
+# Guessing with 2
+guess = 2
+results2 <- nr_method(x = guess, f_x_func = f_x_func, d_fx_func = d_fx_func)
+results2$results %>% View()
+graf_1 <- results2$fig_final_total
+
+# Guessing with 4
+guess = 4
+results4 <- nr_method(x = guess, f_x_func = f_x_func, d_fx_func = d_fx_func)
+results4$results %>% View()
+graf_2 <- results4$fig_final_total
+
+# Guessing with very small and negative number
+guess = 0.014
+results0 <- nr_method(x = guess, f_x_func = f_x_func, d_fx_func = d_fx_func)
+results0$results %>% View()
+graf_3 <- results0$fig_final_total
+
+# Guessing with very small and negative number
+guess = -0.014
+results_0 <- nr_method(x = guess, f_x_func = f_x_func, d_fx_func = d_fx_func)
+results_0$results %>% View()
