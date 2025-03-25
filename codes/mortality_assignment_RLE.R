@@ -91,9 +91,9 @@ rle |>
   filter(!is.na(rle)) |>
   ggplot() +
   aes(x = year, y = rle, color = country) +
-  geom_line(linewidth = 1.1) +
-  geom_segment(aes(x = 2000, y = 10,xend = 2000, yend = 24), color = "grey44", linewidth = 1.1) +
-  geom_segment(aes(x = 2000, y = 10,xend = 2023, yend = 10), color = "grey44", linewidth = 1.1) +
+  geom_point(size = 2, alpha = .5) +
+  geom_smooth(se = FALSE, linewidth = 1.2) +
+
   lemon::facet_rep_wrap(. ~ sex,repeat.tick.labels = TRUE) +
   coord_cartesian(ylim = c(10,24)) +
   scale_y_continuous(breaks = seq(8,25,2)) +
@@ -108,6 +108,6 @@ rle |>
     axis.title = element_text(face = "bold", size = 14, colour = "grey44"),
     strip.text = element_text(face = "bold", size = 12, colour = "grey44"),
     axis.text = element_text(size = 10, colour = "grey44"),
-    legend.position = "right"
+    legend.position = "bottom"
   )
 
