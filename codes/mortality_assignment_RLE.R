@@ -109,7 +109,6 @@ ages_labs <- tibble(
   )
 )
 
-
 # Without take into account increase of age at retirement in Azerbaijan
 rle |>
   left_join(
@@ -134,22 +133,21 @@ rle |>
     aes(
       x = 2000,
       y = 15,
-      label = "e(t,Denmark) = 14.5",
+      label = "e(t,Denmark) = 14.5"
     ),
     color = "grey44",
     hjust = 0
   ) +
   geom_text(aes(x = 2000, y = Inf, label = labs, group = sex),
-            size = 4,
             hjust = 0,
             vjust = 1.4,
             color = "grey44") +
-  theme_minimal(base_size = 15) +
+  theme_minimal(base_size = 20) +
   scale_color_brewer(type = "qual", palette = "Set2") +
   theme(
-    axis.title = element_text(face = "bold", size = 14, colour = "grey44"),
-    strip.text = element_text(face = "bold", size = 12, colour = "grey44"),
-    axis.text = element_text(size = 10, colour = "grey44"),
+    axis.title = element_text(face = "bold", colour = "grey44"),
+    strip.text = element_text(face = "bold", colour = "grey44"),
+    axis.text = element_text(colour = "grey44"),
     legend.position = "bottom"
   )
 
@@ -176,13 +174,12 @@ rle |>
     aes(
       x = 2000,
       y = 15,
-      label = "e(t,Denmark) = 14.5",
+      label = "e(t,Denmark) = 14.5"
     ),
     color = "grey44",
     hjust = 0
   ) +
   geom_text(aes(x = 2000, y = Inf, label = labs_index, group = sex),
-            size = 4,
             hjust = 0,
             vjust = 1.4,
             color = "grey44") +
@@ -194,12 +191,12 @@ rle |>
     y = "Remaining Life Expectancy (RLE)",
     x = "Year"
   ) +
-  theme_minimal(base_size = 15) +
+  theme_minimal(base_size = 20) +
   scale_color_brewer(type = "qual", palette = "Set2") +
   theme(
-    axis.title = element_text(face = "bold", size = 14, colour = "grey44"),
-    strip.text = element_text(face = "bold", size = 12, colour = "grey44"),
-    axis.text = element_text(size = 10, colour = "grey44"),
+    axis.title = element_text(face = "bold", colour = "grey44"),
+    strip.text = element_text(face = "bold", colour = "grey44"),
+    axis.text = element_text(colour = "grey44"),
     legend.position = "bottom"
   )
 
@@ -209,4 +206,3 @@ ggsave(
   width = 10,
   height = 6.5
 )
-
