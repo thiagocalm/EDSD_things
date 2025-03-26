@@ -144,7 +144,7 @@ rle |>
             hjust = 0,
             vjust = 1.4,
             color = "grey44") +
-  theme_minimal() +
+  theme_minimal(base_size = 15) +
   scale_color_brewer(type = "qual", palette = "Set2") +
   theme(
     axis.title = element_text(face = "bold", size = 14, colour = "grey44"),
@@ -152,6 +152,13 @@ rle |>
     axis.text = element_text(size = 10, colour = "grey44"),
     legend.position = "bottom"
   )
+
+ggsave(
+  filename = "outputs/mortality2_rle.pdf",
+  device = "pdf",
+  width = 10,
+  height = 6.5
+)
 
 # With take into account increase of age at retirement in Azerbaijan
 rle |>
@@ -187,7 +194,7 @@ rle |>
     y = "Remaining Life Expectancy (RLE)",
     x = "Year"
   ) +
-  theme_minimal() +
+  theme_minimal(base_size = 15) +
   scale_color_brewer(type = "qual", palette = "Set2") +
   theme(
     axis.title = element_text(face = "bold", size = 14, colour = "grey44"),
@@ -195,4 +202,11 @@ rle |>
     axis.text = element_text(size = 10, colour = "grey44"),
     legend.position = "bottom"
   )
+
+ggsave(
+  filename = "outputs/mortality2_rle_scenarios.pdf",
+  device = "pdf",
+  width = 10,
+  height = 6.5
+)
 
