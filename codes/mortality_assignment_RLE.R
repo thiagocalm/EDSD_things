@@ -79,26 +79,111 @@ lt <- lt |>
 rle <- lt |>
   group_by(year, country = Location, sex = Sex) |>
   reframe(
-    rle = case_when(age == retirement_age ~ ex, TRUE ~ NA_integer_),
-    rle_new_law = case_when(age == age_law ~ ex, TRUE ~ NA_integer_),
+    rle = case_when(age == retirement_age ~ ex, TRUE ~ 0),
+    rle_new_law = case_when(age == age_law ~ ex, TRUE ~ 0),
+    rle_label = case_when(age == age_law & country == "Azerbaijan" ~ "Indexation", TRUE ~ "No indexation"),
   ) |>
-  filter(!is.na(rle) | !is.na(rle_new_law))
-
+  distinct() |>
+  group_by(year, country, sex, rle_label) |>
+  reframe(
+    rle = sum(rle),
+    rle_new_law = sum(rle_new_law)) |>
+  mutate(rle = case_when(rle == 0 ~ rle_new_law, TRUE ~ rle)) |>
+  mutate(rle_new_law = sum(rle_new_law), .by = c(year, country, sex)) |>
+  mutate(rle = case_when(rle == 0 ~ rle_new_law, TRUE ~ rle)) |>
+  select(-rle_new_law)
 
 # Plotting it -------------------------------------------------------------
 
+# creating texts for graphic
+
+ages_labs <- tibble(
+  sex = c("Male","Female"),
+  labs = c(
+    "Retirement age:\nArmenia - 65\nAzerbaijan - 63\nGeorgia - 65",
+    "Retirement age:\nArmenia - 63\nAzerbaijan - 60\nGeorgia - 60"
+  ),
+  labs_index = c(
+    "Retirement age (no indexation):\n-Armenia - 65\n-Azerbaijan - 63\n-Georgia - 65",
+    "Retirement age (no indexation):\n-Armenia - 63\n-Azerbaijan - 60\n-Georgia - 60"
+  )
+)
+
+
+# Without take into account increase of age at retirement in Azerbaijan
 rle |>
-  filter(!is.na(rle)) |>
+  left_join(
+    ages_labs,
+    by = join_by(sex)
+  ) |>
+  filter(rle_label == "No indexation") |>
   ggplot() +
   aes(x = year, y = rle, color = country) +
   geom_point(size = 2, alpha = .5) +
   geom_smooth(se = FALSE, linewidth = 1.2) +
-
-  lemon::facet_rep_wrap(. ~ sex,repeat.tick.labels = TRUE) +
+  geom_hline(yintercept = 14.5, linetype = "dotted", color = "grey44", linewidth = 1.3) +
+  lemon::facet_rep_wrap(.~sex, repeat.tick.labels = TRUE) +
   coord_cartesian(ylim = c(10,24)) +
   scale_y_continuous(breaks = seq(8,25,2)) +
   labs(
     color = "",
+    y = "Remaining Life Expectancy (RLE)",
+    x = "Year"
+  ) +
+  geom_text(
+    aes(
+      x = 2000,
+      y = 15,
+      label = "e(t,Denmark) = 14.5",
+    ),
+    color = "grey44",
+    hjust = 0
+  ) +
+  geom_text(aes(x = 2000, y = Inf, label = labs, group = sex),
+            size = 4,
+            hjust = 0,
+            vjust = 1.4,
+            color = "grey44") +
+  theme_minimal() +
+  scale_color_brewer(type = "qual", palette = "Set2") +
+  theme(
+    axis.title = element_text(face = "bold", size = 14, colour = "grey44"),
+    strip.text = element_text(face = "bold", size = 12, colour = "grey44"),
+    axis.text = element_text(size = 10, colour = "grey44"),
+    legend.position = "bottom"
+  )
+
+# With take into account increase of age at retirement in Azerbaijan
+rle |>
+  left_join(
+    ages_labs,
+    by = join_by(sex)
+  ) |>
+  ggplot() +
+  aes(x = year, y = rle, color = country) +
+  geom_point(size = 2, alpha = .5, show.legend = FALSE) +
+  geom_hline(yintercept = 14.5, linetype = "dotted", color = "grey44", linewidth = 1.3) +
+  geom_smooth(aes(linetype = fct_rev(rle_label)), se = FALSE, linewidth = 1.2) +
+  lemon::facet_rep_wrap(.~sex, repeat.tick.labels = TRUE) +
+  geom_text(
+    aes(
+      x = 2000,
+      y = 15,
+      label = "e(t,Denmark) = 14.5",
+    ),
+    color = "grey44",
+    hjust = 0
+  ) +
+  geom_text(aes(x = 2000, y = Inf, label = labs_index, group = sex),
+            size = 4,
+            hjust = 0,
+            vjust = 1.4,
+            color = "grey44") +
+  coord_cartesian(ylim = c(10,24)) +
+  scale_y_continuous(breaks = seq(8,25,2)) +
+  labs(
+    color = "",
+    linetype = "",
     y = "Remaining Life Expectancy (RLE)",
     x = "Year"
   ) +
