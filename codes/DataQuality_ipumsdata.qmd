@@ -1,0 +1,206 @@
+---
+title: "EDSD - Data Quality - IPUMS Exercise"
+author: "Thiago Cordeiro Almeida"
+format: pdf
+editor_options: 
+  chunk_output_type: console
+documentclass: article
+classoption: a4paper
+header-includes:
+- \setlength\parindent{24pt}
+- \usepackage{indentfirst}
+- \usepackage[left=2.5cm,right=2.5cm,top=3.0cm,bottom=3.0cm]{geometry}
+- \usepackage[utf8]{inputenc}
+fontsize: 12pt
+dpi: 150
+
+---
+
+```{r importing data,echo=FALSE,warning=FALSE,message=FALSE}
+
+# Settings
+rm(list = ls()) # removing all itens of environment
+invisible(gc()) # clealing the storage memory of the computer
+
+# Libraries ---------------------------------------------------------------
+
+library(pacman)
+p_load(tidyverse, ipumsr)
+
+
+# Importing data ----------------------------------------------------------
+
+## Let's use ipums package to import it
+
+# First - importing ddi
+
+ddi <- read_ipums_ddi("../data/ipumsi_00036.xml")
+data <- read_ipums_micro(ddi)
+
+```
+# IPUMS International Data Extract and Analysis
+
+Data qulity, European Doctoral School of Demography 2024-2025
+
+INED-Paris (France)
+
+Instructor: Mariona Lozano, Centre d'Estudis Demogràfics
+
+Student: Thiago Cordeiro Almeida
+
+\-\-\-
+
+# Question and Variables
+In this exercise you will gain basic familiarity with the IPUMS International data exploration and extract system to answer the following question: “What are the differences in urbanization, literacy, and occupational participation in Uganda and Mexico?”
+
+You will create a data extract that includes the following variables: URBAN, SEX, EMPSTAT, OCCISCO, LIT, AGE. 
+
+\-\-\-
+
+# Part 1. Variable documentation
+
+For each variable below, search through the tabbed sections of the variable description to answer each question.
+
+  1. Under the “Household” dropdown menu, find the “Geography” subcategory and click on the variable URBAN. What constitutes an urban area in each country?
+  
+    a. Mexico 2000: Urban places are defined consistently across Mexican samples as localities with 2,500 or more persons.
+    b. Uganda 2002: Urban areas in 2002 and 2014 are gazetted cities, municipalities and towns with more than 2,000 inhabitants.
+  
+  2. What are the codes for URBAN?
+  `1` for Rural, `2` for Urban and `9` for Unknown.
+  
+  3. Find the variable EMPSTAT. Is the reference period of work the same for Mexico and Uganda? 
+  As IPUMS documentation describes, the reference period of work can be different depending on the country. In this case, for Mexico and Uganda the reference period of work are the same, a "reference week (typically the week prior to the census)".
+  
+  4. What is the universe for EMPSTAT in:
+  
+    a. Mexico 2000: Persons age 12+
+    b. Uganda 2002: Persons age 5+
+    
+# Part 2. Frequencies
+
+  5. Find codes page for the SAMPLE variable. What are the codes for:
+    
+    a. Mexico 2000: 484200001
+    b. Uganda 2002: 800200201
+    
+  6. How many individuals are in the Mexico 2000 sample extract?
+    
+    There are `r paste0(as.numeric(table(data$COUNTRY)[1]))` individuals.
+    
+  7. How many individuals are in the Uganda 2002 sample extract?
+    
+    There are `r paste0(as.numeric(table(data$COUNTRY)[2]))` individuals.
+  
+  8. What proportion of individuals in the sample lived in urban areas in each country?
+  
+    a. Mexico 2000: `r paste0(round(100*prop.table(table(data$URBAN, data$COUNTRY),2),2)[2,1])`
+    b. Uganda 2002: `r paste0(round(100*prop.table(table(data$URBAN, data$COUNTRY),2),2)[2,2])`
+    
+# Part 3. Weighted frequencies
+
+To get a more accurate estimate of the actual proportion of individuals living in urban areas, you will have to use the person weight.
+
+  9. Using weights, what is the total population of each country?
+  
+    a. Mexico 2000: `r paste0(data |> summarise(n = sum(PERWT), .by = COUNTRY) |> round(0) |> pluck(2,1))`
+    b. Uganda 2002: `r paste0(data |> summarise(n = sum(PERWT), .by = COUNTRY) |> round(0) |> pluck(2,2))`
+  
+  10. Using weights, how many individuals lived in urban areas in each country?
+  
+    a. Mexico 2000: `r paste0(data |> filter(URBAN == 2) |>  summarise(n = sum(PERWT), .by = COUNTRY) |> round(0) |> pluck(2,1))`
+    b. Uganda 2002: `r paste0(data |> filter(URBAN == 2) |> summarise(n = sum(PERWT), .by = COUNTRY) |> round(0) |> pluck(2,2))`
+    
+  11. Using weights, what proportion of individuals lived in urban areas in each country?
+  
+    a. Mexico 2000: `r paste0(data |> summarise(n = sum(PERWT), .by = c(COUNTRY, URBAN)) |> mutate(prop = round(n/sum(n)*100,2), .by = COUNTRY) |> filter(URBAN == 2) |> pluck(4,1))`% of individuals lived in urban areas.
+    b. Uganda 2002: `r paste0(data |> summarise(n = sum(PERWT), .by = c(COUNTRY, URBAN)) |> mutate(prop = round(n/sum(n)*100,2), .by = COUNTRY) |> filter(URBAN == 2) |> pluck(4,2))`% of individuals lived in urban areas.
+
+# Part 4. Trends
+
+  12. Using weights, which occupational category has the highest percentage of workers?
+  
+    a. Mexico 2000: `r paste0(ipums_val_labels(data$OCCISCO) |> filter(val == data |> filter(OCCISCO != 99) |> summarise(n = sum(PERWT), .by = c(COUNTRY, OCCISCO)) |> mutate(prop = round(n/sum(n)*100,2), .by = COUNTRY) |> arrange(COUNTRY, desc(prop)) |> mutate(ranking = row_number(), .by = COUNTRY) |>  filter(ranking == 1) |> pluck(2,1)) |> pluck(2,1)," was the higherst percentage category of workers,"," with ",data |> filter(OCCISCO != 99) |> summarise(n = sum(PERWT), .by = c(COUNTRY, OCCISCO)) |> mutate(prop = round(n/sum(n)*100,2), .by = COUNTRY) |> arrange(COUNTRY, desc(prop)) |> mutate(ranking = row_number(), .by = COUNTRY) |>  filter(ranking == 1) |> pluck(4,1))`% of workers.
+    b. Uganda 2002: `r paste0(ipums_val_labels(data$OCCISCO) |> filter(val == data |> filter(OCCISCO != 99) |> summarise(n = sum(PERWT), .by = c(COUNTRY, OCCISCO)) |> mutate(prop = round(n/sum(n)*100,2), .by = COUNTRY) |> arrange(COUNTRY, desc(prop)) |> mutate(ranking = row_number(), .by = COUNTRY) |>  filter(ranking == 1) |> pluck(2,2)) |> pluck(2,1)," was the higherst percentage category of workers,"," with ",data |> filter(OCCISCO != 99) |> summarise(n = sum(PERWT), .by = c(COUNTRY, OCCISCO)) |> mutate(prop = round(n/sum(n)*100,2), .by = COUNTRY) |> arrange(COUNTRY, desc(prop)) |> mutate(ranking = row_number(), .by = COUNTRY) |>  filter(ranking == 1) |> pluck(4,2))`% of workers.
+    
+  13. Which occupation category has the highest percentage of female workers?
+  
+    a. Mexico 2000: `r paste0(ipums_val_labels(data$OCCISCO) |> filter(val == data |> filter(OCCISCO != 99) |> summarise(n = sum(PERWT), .by = c(COUNTRY, OCCISCO, SEX)) |> mutate(prop = round(n/sum(n)*100,2), .by = c(COUNTRY,OCCISCO)) |> arrange(COUNTRY, SEX, desc(prop)) |> mutate(ranking = row_number(), .by = c(COUNTRY,SEX)) |>  filter(SEX == 2, ranking == 1) |> pluck(2,1)) |> pluck(2,1)," was the higherst percentage category of female workers,"," with ",data |> filter(OCCISCO != 99) |> summarise(n = sum(PERWT), .by = c(COUNTRY, OCCISCO, SEX)) |> mutate(prop = round(n/sum(n)*100,2), .by = c(COUNTRY,OCCISCO)) |> arrange(COUNTRY, SEX, desc(prop)) |> mutate(ranking = row_number(), .by = c(COUNTRY,SEX)) |>  filter(SEX == 2, ranking == 1) |> pluck(5,1))`% of female workers.
+    b. Uganda 2002: `r paste0(ipums_val_labels(data$OCCISCO) |> filter(val == data |> filter(OCCISCO != 99) |> summarise(n = sum(PERWT), .by = c(COUNTRY, OCCISCO, SEX)) |> mutate(prop = round(n/sum(n)*100,2), .by = c(COUNTRY,OCCISCO)) |> arrange(COUNTRY, SEX, desc(prop)) |> mutate(ranking = row_number(), .by = c(COUNTRY,SEX)) |>  filter(SEX == 2, ranking == 1) |> pluck(2,2)) |> pluck(2,1)," was the higherst percentage category of female workers,"," with ",data |> filter(OCCISCO != 99) |> summarise(n = sum(PERWT), .by = c(COUNTRY, OCCISCO, SEX)) |> mutate(prop = round(n/sum(n)*100,2), .by = c(COUNTRY,OCCISCO)) |> arrange(COUNTRY, SEX, desc(prop)) |> mutate(ranking = row_number(), .by = c(COUNTRY,SEX)) |>  filter(SEX == 2, ranking == 1) |> pluck(5,2))`% of female workers.
+    
+  14. What is the labour force participation distribution by gender in each country?
+  
+    a. Mexico 2000: `r paste0("Male's labour force participation was ", data |> filter(EMPSTAT != 0) |>  mutate(in_participate = case_when(EMPSTAT %in% 1:2 ~ 1, TRUE ~ 0)) |> summarise(n = sum(PERWT), .by = c(COUNTRY, SEX,in_participate)) |> mutate(prop = round(n/sum(n)*100,2), .by = c(COUNTRY,SEX)) |> filter(in_participate == 1) |> arrange(COUNTRY, SEX, desc(prop)) |> pluck(5,1), "%. Female's labour force participation was ",data |> filter(EMPSTAT != 0) |>  mutate(in_participate = case_when(EMPSTAT %in% 1:2 ~ 1, TRUE ~ 0)) |> summarise(n = sum(PERWT), .by = c(COUNTRY, SEX,in_participate)) |> mutate(prop = round(n/sum(n)*100,2), .by = c(COUNTRY,SEX)) |> filter(in_participate == 1) |> arrange(COUNTRY, SEX, desc(prop)) |> pluck(5,2),"%.")`.
+    b. Uganda 2002: `r paste0("Male's labour force participation was ", data |> filter(EMPSTAT != 0) |>  mutate(in_participate = case_when(EMPSTAT %in% 1:2 ~ 1, TRUE ~ 0)) |> summarise(n = sum(PERWT), .by = c(COUNTRY, SEX,in_participate)) |> mutate(prop = round(n/sum(n)*100,2), .by = c(COUNTRY,SEX)) |> filter(in_participate == 1) |> arrange(COUNTRY, SEX, desc(prop)) |>  pluck(5,3), "%. Female's labour force participation was ",data |> filter(EMPSTAT != 0) |>  mutate(in_participate = case_when(EMPSTAT %in% 1:2 ~ 1, TRUE ~ 0)) |> summarise(n = sum(PERWT), .by = c(COUNTRY, SEX,in_participate)) |> mutate(prop = round(n/sum(n)*100,2), .by = c(COUNTRY,SEX)) |> filter(in_participate == 1)  |> arrange(COUNTRY, SEX, desc(prop)) |> pluck(5,4),"%.")`.
+    
+  15. What percentage of women within the labour force is working:
+  
+    a. In agriculture in Mexico 2000: `r paste0(data |> filter(EMPSTAT %in% 1:2, SEX == 2) |> mutate(in_working = case_when(EMPSTAT == 1 ~ 1, TRUE ~ 0)) |> reframe(n = sum(PERWT), .by = c(COUNTRY, OCCISCO, in_working)) |> reframe(working_rate = round(100*n[OCCISCO == 6]/sum(n),2),.by = COUNTRY) |> pluck(2,1))`% of women within the labour force were working in agriculture.
+    
+    b. In agriculture in Uganda 2002: `r paste0(data |> filter(EMPSTAT %in% 1:2, SEX == 2) |> mutate(in_working = case_when(EMPSTAT == 1 ~ 1, TRUE ~ 0)) |> reframe(n = sum(PERWT), .by = c(COUNTRY, OCCISCO, in_working)) |> reframe(working_rate = round(100*n[OCCISCO == 6]/sum(n),2),.by = COUNTRY) |> pluck(2,2))`% of women within the labour force were working in agriculture.
+    
+    c. In service in Mexico 2000: `r paste0(data |> filter(EMPSTAT %in% 1:2, SEX == 2) |> mutate(in_working = case_when(EMPSTAT == 1 ~ 1, TRUE ~ 0)) |> reframe(n = sum(PERWT), .by = c(COUNTRY, OCCISCO, in_working)) |> reframe(working_rate = round(100*n[OCCISCO == 5]/sum(n),2),.by = COUNTRY) |> pluck(2,1))`% of women within the labour force were working in agriculture.
+    
+    d. In service in Uganda 2002: `r paste0(data |> filter(EMPSTAT %in% 1:2, SEX == 2) |> mutate(in_working = case_when(EMPSTAT == 1 ~ 1, TRUE ~ 0)) |> reframe(n = sum(PERWT), .by = c(COUNTRY, OCCISCO, in_working)) |> reframe(working_rate = round(100*n[OCCISCO == 5]/sum(n),2),.by = COUNTRY) |> pluck(2,2))`% of women within the labour force were working in agriculture.
+    
+# Part 5. Graphical Analysis
+
+  16. What percentage of the population is literate in each country?
+  
+    a. Mexico 2000: `r paste0(data |> filter(LIT %in% 1:2) |> summarise(n = sum(PERWT), .by = c(COUNTRY, LIT)) |> mutate(prop = round(100*n/sum(n),2), .by = COUNTRY) |> filter(LIT == 2) |> pluck(4,1))`% of Mexican population were literate in 2000.
+    b. Uganda 2002: `r paste0(data |> filter(LIT %in% 1:2) |> summarise(n = sum(PERWT), .by = c(COUNTRY, LIT)) |> mutate(prop = round(100*n/sum(n),2), .by = COUNTRY) |> filter(LIT == 2) |> pluck(4,2))`% of Ugandan population were literate in 2002.
+    
+  17. (OPTIONAL) Create a graph to visualize differences in the percentage of literacy by AGE and SEX in both countries.
+
+```{r,warning=FALSE,echo=FALSE,message=FALSE}
+
+data |> 
+  filter(LIT %in% 1:2, AGE < 100) |> 
+  summarise(n = sum(PERWT), .by = c(COUNTRY, LIT, AGE)) |> 
+  mutate(prop = round(100*n/sum(n),2), .by = c(COUNTRY,AGE)) |>
+  mutate(
+    COUNTRY = factor(COUNTRY, levels = c(484, 800), labels = c("Mexico","Uganda"))
+  ) |> 
+  filter(LIT == 2, AGE >= 10) |> 
+  ggplot() +
+  aes(x = AGE, y = prop, color = COUNTRY, group = COUNTRY) +
+  geom_point(size = 2, alpha = .5, show.legend = FALSE) +
+  geom_smooth(se = FALSE,linewidth = 1.3, show.legend = FALSE) +
+  scale_color_manual(values = c("#5ab4ac","#998ec3")) +
+  scale_y_continuous(breaks = seq(0,100,20)) +
+  scale_x_continuous(breaks = seq(0,100,10)) +
+  labs(
+    x = "Age (years)",
+    y = "Proportion of literate population (%)",
+    caption = "Source: IPUMS International.",
+    title = "Proportion of literate population by age (%) - Uganda (2002)\nand Mexico (2000)"
+  ) +
+  annotate(
+    geom="text",
+    x=80,
+    y=80,
+    label="Mexico (2000)",
+    color="#5ab4ac",
+    fontface =2,
+    size = 6
+  ) +
+  annotate(
+    geom="text",
+    x=50,
+    y=30,
+    label="Uganda (2002)",
+    color="#998ec3",
+    fontface =2,
+    size = 6
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.title = element_text(color = "grey44", face = "bold", hjust = .5),
+    plot.caption = element_text(color = "grey44", face = "italic", hjust = 1),
+    axis.title.x = element_text(color = "grey44", face = "bold", hjust = .5),
+    axis.title.y = element_text(color = "grey44", face = "bold", hjust = .5),
+    axis.text = element_text(color = "grey44")
+  )
+
+```
+
