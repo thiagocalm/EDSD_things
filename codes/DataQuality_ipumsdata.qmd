@@ -1,16 +1,17 @@
 ---
 title: "EDSD - Data Quality - IPUMS Exercise"
 author: "Thiago Cordeiro Almeida"
-format: pdf
+format: 
+  pdf:
+    documentclass: article
+    keep-tex: true
+    include-in-header: |
+      \usepackage[a4paper, left=2cm, right=2cm, top=2.5cm, bottom=2.5cm]{geometry}
+      \usepackage{ragged2e}
+      \justifying
+      \sloppy
 editor_options: 
   chunk_output_type: console
-documentclass: article
-classoption: a4paper
-header-includes:
-- \setlength\parindent{24pt}
-- \usepackage{indentfirst}
-- \usepackage[left=2.5cm,right=2.5cm,top=3.0cm,bottom=3.0cm]{geometry}
-- \usepackage[utf8]{inputenc}
 fontsize: 12pt
 dpi: 150
 
