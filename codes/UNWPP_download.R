@@ -120,3 +120,95 @@ download_wpp24 <-
     # Return a message indicating the process is complete
     return("2024 World Population Prospects data downloaded and saved successfully as CSV files.")
 }
+
+## Function to download previous World Population Prospects data versions
+download_wpp_previous <-
+  function(dir_download = "data", wpp_version_year, save_data = "both", indicator = NULL) {
+
+    # Function to download and save a file with a warning if it already exists - made by Amanda Martins (MPIDR, 2024)
+    download_file <-
+      function(url, destfolder, destfile) {
+        if (file.exists(file.path(destfolder,destfile))) { # Check if the file already exists
+          warning(paste("The file", destfile, "already exists. Skipping download."))
+        } else {
+          download.file(url, destfile = file.path(destfolder,destfile), mode = "wb")
+        }
+      }
+
+    # Create data directory if it does not exist
+    if (!dir.exists(dir_download)) {
+      dir.create(dir_download)
+    }
+    if(save_data %in% c("raw","both")){
+      if(!dir.exists(file.path(dir_download,"raw"))){
+        dir.create(file.path(dir_download,"raw"))
+      }
+    }
+
+    # Some parameters ---
+
+    year <- wpp_version_year # choosing a year
+    url_versions <- paste0("https://population.un.org/wpp/assets/Excel%20Files/5_Archive/WPP",year,"-CSV-data.zip") # url for version
+    wpp_downloaded_file <- paste0("WPP",year,"-CSV-data.zip") # downloaded file
+    if(save_data %in% c("raw","both")){
+      wpp_downloaded_folder <- file.path(dir_download,"raw") # downloaded folder - storaged in the computer
+    } else{
+      wpp_downloaded_folder <- tempdir() # downloaded folder - temporary folder
+    }
+    # indicator
+    ## possible choices:
+    #' fertility         - fertility by age and year
+    #' mortality         - life tables by age and year
+    #' indicators_mv     - general indicators, medium variant
+    #' indicators_ov     - general indicators, other variants
+    #' pop_agesex_5x5_mv - pop by age and sex 5 years age groups, medium variant
+    #' pop_agesex_1x1_mv - pop by age and sex 1 year age groups, medium variant
+    #' pop_agesex_1x1_ov - pop by age and sex 1 year age groups, other variant
+    #' pop_sex_1x1_tv    - pop by sex for each projected year, all the variants
+    if(save_data %in% c("both","unzipped")){
+      if(is.null(indicator)){
+        stop("You must to declare one of the indicators for downloading these data...")
+      }
+      if(length(indicator) > 1){
+        stop("You must to declare just one indicator each time... try to import each of your interested indicators.")
+      }
+    }
+    if(indicator == "fertility"){
+      ind = paste0("WPP",year,"_Fertility_by_Age.csv")
+    }
+    if(indicator == "mortality"){
+      ind = paste0("WPP",year,"_Life_Table.csv")
+    }
+    if(indicator == "indicators_mv"){
+      ind = paste0("WPP",year,"_Period_Indicators_Medium.csv")
+    }
+    if(indicator == "indicators_ov"){
+      ind = paste0("WPP",year,"_Period_Indicators_OtherVariants.csv")
+    }
+    if(indicator == "pop_agesex_5x5_mv"){
+      ind = paste0("WPP",year,"_PopulationByAgeSex_5x5_Medium.csv")
+    }
+    if(indicator == "pop_agesex_1x1_mv"){
+      ind = paste0("WPP",year,"_PopulationByAgeSex_Medium.csv")
+    }
+    if(indicator == "pop_agesex_1x1_ov"){
+      ind = paste0("WPP",year,"_PopulationByAgeSex_OtherVariants.csv")
+    }
+    if(indicator == "pop_sex_1x1_tv"){
+      ind = paste0("WPP",year,"_TotalPopulationBySex.csv")
+    }
+
+    # downloading raw data...
+    download_file(url_versions, destfolder = wpp_downloaded_folder, destfile = wpp_downloaded_file)
+
+    # unzip file with interested indicator
+    if(file.exists(file.path(dir_download,ind))){
+      warning(paste("The file", ind, "already exists. Skipping unzip process."))
+    } else{
+      unzip(zipfile = file.path(wpp_downloaded_folder,wpp_downloaded_file),files = ind, exdir = dir_download)
+    }
+
+    # Return a message indicating the process is complete
+    invisible(gc())
+    return(paste0(year,"'s World Population Prospects data review downloaded and saved successfully as CSV files."))
+  }
