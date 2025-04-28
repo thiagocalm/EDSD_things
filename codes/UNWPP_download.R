@@ -212,3 +212,7 @@ download_wpp_previous <-
     invisible(gc())
     return(paste0(year,"'s World Population Prospects data review downloaded and saved successfully as CSV files."))
   }
+
+# Example
+
+# download_wpp_previous(wpp_version_year = 2019, indicator = "pop_agesex_1x1_mv")
