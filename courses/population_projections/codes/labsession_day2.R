@@ -172,23 +172,22 @@ head(dta.swe)
 
 # CCM function - for female... we have to generalize it
 
-function_ProjPop_CCM <- function(N0,LFx, time, age, SRB, l0, Fx){
-  # Calculating the Sx
-  leaded = lead(LFx)
-  SFx = leaded/LFx
-  SFx[length(SFx)-1] = leaded[length(SFx)-1]/(leaded[length(SFx)-2]+leaded[length(SFx)-1])
-  Sx = as.matrix(Sx)
+function_ProjPop_CCM <- function(N0, LFx, time, age, SRB, l0, Fx){
+  # Calculating the Sx - Female
+  SFx = lead(LFx)/LFx
+  SFx[length(SFx)-1] = LFx[length(LFx)]/(LFx[length(SFx)-1]+LFx[length(SFx)])
+  SFx = as.matrix(SFx)
   # Computing the population projection for each age group
   NT <- matrix(NA,nrow = length(N0), ncol = length(time))
   NT[,1] <- N0
   for(t in 2:length(time)){
     # Creating births
-    bf = (1)/(1 + SRB) * (LFx)/(2 * l0) * (Fx + Sx * lead(Fx))
+    bf = (1)/(1 + SRB) * (LFx)/(2 * l0) * (Fx + SFx * lead(Fx))
     bf[is.na(bf)] = 0
     # all the groups
-    NT[,t] = NT[,t-1] * Sx[,t-1]
+    NT[,t] = lag(NT[,t-1]) * lag(SFx[,t-1])
     # Opened-age group
-    NT[length(age),t] = (NT[length(age)-1,t-1] + NT[length(age),t-1]) * Sx[length(age)-1,t-1]
+    NT[length(age),t] = (NT[length(age)-1,t-1] + NT[length(age),t-1]) * SFx[length(age)-1,t-1]
     # First age group
     NT[1,t] = sum(NT[,t-1] * bf)
   }
@@ -204,3 +203,16 @@ N_female_proj <- function_ProjPop_CCM(
   l0 = 100000,
   Fx = dta.swe$Fx
 )
+
+# Plotting population composition by age group
+
+N_female_proj |>
+  as_tibble() |>
+  rename(`1993` = V1, `1998` = V2) |>
+  mutate(age = dta.swe$Age) |>
+  pivot_longer(1:2, names_to = "year", values_to = "n") |>
+  ggplot() +
+  aes(x = age, y = n, color = year) +
+  geom_point(size = 4, alpha = .5) +
+  geom_line(linewidth = 1.3) +
+  theme_minimal()
