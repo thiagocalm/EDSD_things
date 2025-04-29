@@ -167,30 +167,40 @@ load("data/dta.swe.1993.Rdata")
 
 head(dta.swe)
 
-# Exercise 1 - projecting female population just based on mortality
+# Exercise 1 - projecting female population
 
-# Survivorship ratios
 
-function_Sx <- function(LFx){
+# CCM function - for female... we have to generalize it
+
+function_ProjPop_CCM <- function(N0,LFx, time, age, SRB, l0, Fx){
+  # Calculating the Sx
   leaded = lead(LFx)
   SFx = leaded/LFx
-}
-
-dta.swe <- dta.swe |>
-  mutate(
-    SFx = function_Sx(LFx)
-  )
-
-# Projecting population
-
-function_ProjPop_CCM <- function(N0,Sx, time){
+  SFx[length(SFx)-1] = leaded[length(SFx)-1]/(leaded[length(SFx)-2]+leaded[length(SFx)-1])
   Sx = as.matrix(Sx)
+  # Computing the population projection for each age group
   NT <- matrix(NA,nrow = length(N0), ncol = length(time))
   NT[,1] <- N0
   for(t in 2:length(time)){
+    # Creating births
+    bf = (1)/(1 + SRB) * (LFx)/(2 * l0) * (Fx + Sx * lead(Fx))
+    bf[is.na(bf)] = 0
+    # all the groups
     NT[,t] = NT[,t-1] * Sx[,t-1]
+    # Opened-age group
+    NT[length(age),t] = (NT[length(age)-1,t-1] + NT[length(age),t-1]) * Sx[length(age)-1,t-1]
+    # First age group
+    NT[1,t] = sum(NT[,t-1] * bf)
   }
   return(NT)
 }
 
-N_female_proj <- function_ProjPop_CCM(N0 = dta.swe$NFx, Sx = dta.swe$SFx, time = 0:1)
+N_female_proj <- function_ProjPop_CCM(
+  N0 = dta.swe$NFx,
+  LFx = dta.swe$LFx,
+  time = 0:1,
+  age = dta.swe$Age,
+  SRB = 1.05,
+  l0 = 100000,
+  Fx = dta.swe$Fx
+)
