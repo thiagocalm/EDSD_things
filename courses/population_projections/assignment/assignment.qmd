@@ -52,15 +52,94 @@ PopProj_growthrate <- function(N0,NT,time){
 
 growth_rates <- pop1 |> 
   pivot_wider(names_from = year, values_from = N) |> 
-  
   reframe(
-    r_5y = PopProj_growthrate(NT = `2019`, N0 = `2014`,time = 5)*100,
-    r_10y = PopProj_growthrate(NT = `2019`, N0 = `2009`,time = 10)*100,
+    r_5y = PopProj_growthrate(NT = `2019`, N0 = `2014`,time = 5),
+    r_10y = PopProj_growthrate(NT = `2019`, N0 = `2009`,time = 10),
     .by = name
   )
 
+```
 
+**2. Project the population 25-years ahead using the constant exponential model and  the two different growth rates**
+
+To project that for each country, we can use the following equation: $$N(t) = N(0) \cdot e^{rt}$$
+
+For that, we will assume different growth rates for each country.
+
+```{r}
+
+pop1 |> 
+  left_join(
+    growth_rates,
+    by = join_by(name)
+  ) |> 
+  filter(year == 2019) |> 
+  summarise(
+    NProj_25y_r5y = N * exp(r_5y * 25),
+    NProj_25y_r10y = N * exp(r_10y * 25),
+    .by = name
+  )
 
 ```
 
-**2. Project the population 25-years ahead using the constant exponential model and  the two differentgrowth rates**
+**3. Make an assumption about one of the demographic components, and compare this projection with the baseline one.**
+
+As we know that the growth rate is composed by mortality, fertility and migration, we can rewrite the growth rate based on crude growth rates: $$r = b - d + m$$
+
+Where $b$ is crude birth rate, $d$ is crude death rate, and $m$ is the crude net migration rate.
+
+It is important to point out that our growth rate are still constant. Thus, to keep using the same model - constant growth rate - we have to assume that this change will happen just once.
+
+Let's assume that the growth rates will decrease in 0.08% due to increases in mortality.
+
+```{r}
+pop1 |> 
+  left_join(
+    growth_rates,
+    by = join_by(name)
+  ) |> 
+  filter(year == 2019) |> 
+  mutate(
+    r_5y_adj = r_5y - 0.0008,
+    r_10y_adj = r_10y - 0.0008
+  ) |> 
+  summarise(
+    NProj_25y_r5y = N * exp(r_5y * 25),
+    NProj_25y_r10y = N * exp(r_10y * 25),
+    NProj_25y_r5y_adj = N * exp(r_5y * 25),
+    NProj_25y_r10y_adj = N * exp(r_10y * 25),
+    .by = name
+  )
+```
+
+**4. Assume that your observed data ends 10 years before the last two available data point. Project the population 10-year ahead with the two growth rates estimated in point 1. which of the two projections is more accurate?**
+
+```{r}
+
+result = pop1 |> 
+  left_join(
+    growth_rates,
+    by = join_by(name)
+  ) |> 
+  filter(year == 2009) |> 
+  summarise(
+    NProj_2019_r5y = N * exp(r_5y * 10),
+    NProj_2019_r10y = N * exp(r_10y * 10),
+    .by = name
+  ) |> 
+  left_join(
+    pop1 |> filter(year == 2019) |> select(name, "Pop_observed_2019" = N),
+    by = join_by(name)
+  )
+
+print(result)
+
+result |> 
+  mutate(
+    diff_r5y = NProj_2019_r5y - Pop_observed_2019,
+    diff_r10y = NProj_2019_r10y - Pop_observed_2019
+  )
+
+```
+
+As expected, the one using the growth rates calculated using the 10 years of difference is more accurate once we have the same result than the estimated population in 2019.
