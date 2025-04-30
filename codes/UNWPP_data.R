@@ -110,8 +110,6 @@ UNWPP_data <- function(dir_download = "data",country, start_year, end_year, sex,
 
     # Check if files exist
     if (!file.exists(fertility_file)) stop("Fertility data file not found: ", fertility_file)
-    if (!file.exists(male_lifetable_file)) stop("Male life table data file not found: ", male_lifetable_file)
-    if (!file.exists(female_lifetable_file)) stop("Female life table data file not found: ", female_lifetable_file)
 
     # Initialize the final data
     # Process fertility data if sex is Female - adjust to import only specific columns
