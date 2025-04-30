@@ -177,7 +177,7 @@ lt_male <- UNWPP_data(
 
 lt <- bind_rows(lt_female, lt_male) |> 
   filter(year %in% c(2015,2020)) |> 
-  select(Location, Sex, year, AgeGrp, age, Lx)
+  select(Location, Sex, year, AgeGrp, age, Lx, lx, mx)
 
 # fertility
 
@@ -218,13 +218,24 @@ lt <- lt |>
     AgeGrp = case_when(agecat >= 85 ~ "85+", TRUE ~ AgeGrp)
   ) |>
   reframe(
+    mx = mean(mx, na.rm = TRUE),
+    lx = lx,
     Lx = sum(Lx),
     .by = c(Location, Sex, year, agecat, AgeGrp)
   ) |>
+  mutate(
+    Lx = case_when(agecat == 85 ~ lx/mx, TRUE ~ Lx)
+  ) |> 
+  arrange(Location, Sex, year, agecat, desc(lx)) |> 
+  mutate(
+    rank = row_number(),
+    .by = c(Location, Sex, year, agecat)
+  ) |> 
+  filter(rank == 1) |> 
+  select(-rank, -mx, -lx) |> 
   pivot_wider(names_from = Sex, values_from = Lx) |> 
   select(everything(), "LxF" = Female, "LxM" = Male)
       
-
 # fertility
 fertility_rates <- fertility_rates |> 
   left_join(
@@ -266,6 +277,161 @@ df <- pop |>
   ) |> 
     select(-AgeGrp) |> 
   mutate(across(everything(), ~ replace_na(., 0)))
+
+```
+
+Projecting the population from 2015 to 2020.
+
+```{r}
+## function to project several periods
+PopProj_Leslei <- function(x,AgeGroup,NFx,sFx,bFx,NMx,sMx,bMx,n){
+  if(is.na(bFx[length(x)])){
+    bFx[length(x)] <- 0
+  }
+  if(is.na(bMx[length(x)])){
+    bMx[length(x)] <- 0
+  }
+  if(is.na(sFx[length(x)])){
+    sFx <- sFx[-length(sFx)]
+  }
+  if(is.na(sMx[length(x)])){
+    sMx <- sFx[-length(sMx)]
+  }
+  ## number of age groups
+  m <- length(x); m2 <- m*2
+  ## female Leslie matrix
+  LF <- matrix(0,m,m)
+  LF[1,] <- bFx
+  diag(LF[-1,]) <- sFx
+  LF[m,m] <- sFx[m-1]
+  ## male Leslie matrix
+  BM <- LM <- matrix(0,m,m)
+  BM[1,] <- bMx
+  diag(LM[-1,]) <- sMx
+  LM[m,m] <- sMx[m-1]
+  ## putting them together
+  ZEROS <- diag(0,m)
+  Lup <- cbind(LF,ZEROS)
+  Ldown <- cbind(BM,LM)
+  L <- rbind(Lup,Ldown)
+  ## create population matrix
+  N <- matrix(0,m2,n+1)
+  N[,1] <- c(NFx,NMx)
+  for (i in 1:n){
+    N[,i+1] <- L%*%N[,i]
+  }
+  out <- cbind(
+    data.frame(
+      x=rep(x,2),
+      AgeGroup=rep(AgeGroup,2),
+      sex=rep(c("Females","Males"),each=m)
+    ),N
+  )
+return(out)
+}
+
+# setting parameters for population projection
+SRB <- 1.05 # defining the sex ratio at birth
+fact.SRB.F <- 1/(1+SRB)
+fact.SRB.M <- SRB/(1+SRB)
+l0 <- 100000
+L0 <- df |> 
+  filter(year == 2015, agecat == 0) |> 
+  select(Location, "LF0" = LxF, "LM0" = LxM)
+
+# creating survived births
+df_2015 <- df %>%
+  filter(year == 2015) |>
+  left_join(L0, by = join_by(Location)) |> 
+  mutate(
+    # Female survivorship ratio
+    SxF=lead(LxF)/LxF,
+    SxF=case_when (agecat != 80 ~ SxF,
+                   agecat == 80 ~ lead(LxF)/(LxF + lead(LxF))),
+    # male survivorship ratio
+    SxM=lead(LxM)/LxM,
+    SxM=case_when (agecat != 80 ~ SxM,
+                   agecat == 80 ~ lead(LxM)/(LxM + lead(LxM))),
+    # survived births by sex
+    bxF=fact.SRB.F * LF0 / (2*l0) * (fx + SxF*lead(fx)),
+    bxM=fact.SRB.M * LM0 / (2*l0) * (fx + SxF*lead(fx)),
+    .by = c(Location, year)
+  )
+
+## Projecting population from 2015 to 2020
+
+# looping it
+PopProj = NULL
+countries = df_2015$Location |> unique()
+for(i in seq_along(countries)){
+  cnt = countries[i] # selecting the country name for this time
+  proj <- PopProj_Leslei(
+    x=df_2015$agecat[df_2015$Location == cnt],
+    AgeGroup=df_2015$age[df_2015$Location == cnt],
+    NFx=df_2015$popF[df_2015$Location == cnt],
+    sFx=df_2015$SxF[df_2015$Location == cnt],
+    bFx=df_2015$bxF[df_2015$Location == cnt],
+    NMx=df_2015$popM[df_2015$Location == cnt],
+    sMx=df_2015$SxM[df_2015$Location == cnt],
+    bMx=df_2015$bxM[df_2015$Location == cnt],
+    n=1
+  )
+  
+  if(i == 1){
+    PopProj <- cbind(
+      country = rep(cnt, nrow(proj)),
+      proj
+    )
+  } else{
+    PopProj <- rbind(
+      PopProj,
+      cbind(
+      country = rep(cnt, nrow(proj)),
+      proj
+    )
+  )
+  }
+}
+
+# plot
+
+# projected
+PopProj |> 
+  as_tibble() |> 
+  rename(`2015` = `1`, `2020` = `2`) |> 
+  pivot_longer(`2015`:`2020`, names_to = "year",values_to = "pop") |> 
+  ggplot() +
+  aes(x = x, y = pop, color = as.factor(year)) +
+  geom_point(size = 3, alpha = .5) +
+  geom_line(linewidth = 1.3) +
+  lemon::facet_rep_grid(sex~country,repeat.tick.labels = TRUE) +
+  theme_light()
+
+# projected x observed
+
+df_2020 <- df |> 
+  filter(year == 2020) |> 
+  select("country" = Location, year, "x" = agecat, "Males" = popM, "Females" = popF) |> 
+  pivot_longer(Males:Females, names_to = "sex", values_to = "EstimatedPop")
+  
+
+PopProj |> 
+  as_tibble() |> 
+  rename(`2015` = `1`, `2020` = `2`) |> 
+  pivot_longer(`2015`:`2020`, names_to = "year",values_to = "ProjectedPop") |>
+  filter(year == 2020) |> 
+  left_join(
+    df_2020,
+    by = join_by(country, x, sex)
+  ) |> 
+  pivot_longer(c(ProjectedPop,EstimatedPop), names_to = "type", values_to = "N") |> 
+  ggplot() +
+  aes(x = x, y = N, color = as.factor(type)) +
+  geom_point(size = 3, alpha = .5) +
+  geom_line(linewidth = 1.3) +
+  lemon::facet_rep_grid(sex~country,repeat.tick.labels = TRUE) +
+  theme_light()
+
 
 ```
 
