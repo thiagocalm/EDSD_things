@@ -175,8 +175,9 @@ lt_male <- UNWPP_data(
   indicator = "mortality"
 )
 
-lt <- bind_rows(lt_female, lt_male)
-rm(lt_female, lt_male)
+lt <- bind_rows(lt_female, lt_male) |> 
+  filter(year %in% c(2014,2019)) |> 
+  select(Location, Sex, year, AgeGrp, age, Lx)
 
 # fertility
 
@@ -189,21 +190,16 @@ fertility_rates <- UNWPP_data(
 )
 
 # population
-pop_male <- UNWPP_data(
-  country = c("Azerbaijan","Georgia","Armenia"),
-  start_year = 2014,
-  end_year = 2019,
-  sex = "Male",
-  indicator = "population"
-)
 
-pop_female <- UNWPP_data(
-  country = c("Azerbaijan","Georgia","Armenia"),
-  start_year = 2014,
-  end_year = 2019,
-  sex = "Male",
-  indicator = "population"
-)
+library(wpp2024)
+data("popAge5dt")
+
+pop <- popAge5dt |> 
+  filter(
+    name %in% c("Azerbaijan","Georgia","Armenia"),
+    year %in% c(2015,2020)
+  )
+
 
 ```
 
