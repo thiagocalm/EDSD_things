@@ -9,6 +9,9 @@ editor_options:
 ```{r packages}
 library(pacman)
 p_load(tidyverse, wpp2024)
+# external functions
+source("codes/UNWPP_data.R")
+source("codes/UNWPP_download.R")
 # general settings
 rm(list = ls()) # removing all itens of environment
 invisible(gc()) # clealing the storage memory of the computer
@@ -143,3 +146,64 @@ result |>
 ```
 
 As expected, the one using the growth rates calculated using the 10 years of difference is more accurate once we have the same result than the estimated population in 2019.
+
+# Exercise 2
+
+
+```{r}
+
+# Downloading the data
+
+download_wpp24(indicator = "mortality")
+download_wpp24(indicator = "fertility")
+
+# Importing data from UNWPP
+
+lt_female <- UNWPP_data(
+  country = c("Azerbaijan","Georgia","Armenia"),
+  start_year = 2014,
+  end_year = 2019,
+  sex = "Female",
+  indicator = "mortality"
+)
+
+lt_male <- UNWPP_data(
+  country = c("Azerbaijan","Georgia","Armenia"),
+  start_year = 2014,
+  end_year = 2019,
+  sex = "Male",
+  indicator = "mortality"
+)
+
+lt <- bind_rows(lt_female, lt_male)
+rm(lt_female, lt_male)
+
+# fertility
+
+fertility_rates <- UNWPP_data(
+  country = c("Azerbaijan","Georgia","Armenia"),
+  start_year = 2014,
+  end_year = 2019,
+  sex = "Female",
+  indicator = "fertility"
+)
+
+# population
+pop_male <- UNWPP_data(
+  country = c("Azerbaijan","Georgia","Armenia"),
+  start_year = 2014,
+  end_year = 2019,
+  sex = "Male",
+  indicator = "population"
+)
+
+pop_female <- UNWPP_data(
+  country = c("Azerbaijan","Georgia","Armenia"),
+  start_year = 2014,
+  end_year = 2019,
+  sex = "Male",
+  indicator = "population"
+)
+
+```
+
