@@ -1,0 +1,66 @@
+---
+title: "Population Projection"
+format: pdf
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r packages}
+library(pacman)
+p_load(tidyverse, wpp2024)
+# general settings
+rm(list = ls()) # removing all itens of environment
+invisible(gc()) # clealing the storage memory of the computer
+```
+
+# Exercise 1
+
+We will choose data from the United Nations, World Population Prospects (Revision of 2024) for Calcasian countries.
+
+```{r}
+data("pop1")
+```
+
+Let's handle with this data to get data just for Calcasian region
+
+```{r ex1_handling_data}
+
+pop1 <- pop1 |>
+  as_tibble() |> 
+  filter(name %in% c("Azerbaijan","Georgia","Armenia")) |> 
+  pivot_longer(`1949`:`2023`, names_to = "year",values_to = "N") |> 
+  filter(year %in% c(2009,2014,2019))
+
+```
+
+**1. Estimating population growth rate using different time interval**
+
+To estimate that, we can use the following equation: $$r = \frac{ln(\frac{N(T)}{N(0)})}{T}$$
+
+Where: T is the number of years between 0 and T.
+
+```{r}
+
+# function for calculating the exponential growth rate
+
+PopProj_growthrate <- function(N0,NT,time){
+  r = log(NT/N0)/time
+}
+
+# Growth rates
+
+growth_rates <- pop1 |> 
+  pivot_wider(names_from = year, values_from = N) |> 
+  
+  reframe(
+    r_5y = PopProj_growthrate(NT = `2019`, N0 = `2014`,time = 5)*100,
+    r_10y = PopProj_growthrate(NT = `2019`, N0 = `2009`,time = 10)*100,
+    .by = name
+  )
+
+
+
+```
+
+**2. Project the population 25-years ahead using the constant exponential model and  the two differentgrowth rates**
