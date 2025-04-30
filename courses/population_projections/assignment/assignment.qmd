@@ -161,33 +161,36 @@ download_wpp24(indicator = "fertility")
 
 lt_female <- UNWPP_data(
   country = c("Azerbaijan","Georgia","Armenia"),
-  start_year = 2014,
-  end_year = 2019,
+  start_year = 2015,
+  end_year = 2020,
   sex = "Female",
   indicator = "mortality"
 )
 
 lt_male <- UNWPP_data(
   country = c("Azerbaijan","Georgia","Armenia"),
-  start_year = 2014,
-  end_year = 2019,
+  start_year = 2015,
+  end_year = 2020,
   sex = "Male",
   indicator = "mortality"
 )
 
 lt <- bind_rows(lt_female, lt_male) |> 
-  filter(year %in% c(2014,2019)) |> 
+  filter(year %in% c(2015,2020)) |> 
   select(Location, Sex, year, AgeGrp, age, Lx)
 
 # fertility
 
 fertility_rates <- UNWPP_data(
   country = c("Azerbaijan","Georgia","Armenia"),
-  start_year = 2014,
-  end_year = 2019,
+  start_year = 2015,
+  end_year = 2020,
   sex = "Female",
   indicator = "fertility"
 )
+
+fertility_rates <- fertility_rates |> 
+  filter(year %in% c(2015,2020))
 
 # population
 
@@ -200,6 +203,69 @@ pop <- popAge5dt |>
     year %in% c(2015,2020)
   )
 
+## Handling the data to have 5 years age group
+data("age5categories") # let's use this data as an auxiliar one
+
+# mortality
+lt <- lt |> 
+  select(-AgeGrp) |>
+  left_join(
+    age5categories |> select(age1,agecat,"AgeGrp" = age),
+    by = c("age" = "age1")
+  ) |>
+  mutate(
+    agecat = case_when(agecat >= 85 ~ 85, TRUE ~ agecat),
+    AgeGrp = case_when(agecat >= 85 ~ "85+", TRUE ~ AgeGrp)
+  ) |>
+  reframe(
+    Lx = sum(Lx),
+    .by = c(Location, Sex, year, agecat, AgeGrp)
+  ) |>
+  pivot_wider(names_from = Sex, values_from = Lx) |> 
+  select(everything(), "LxF" = Female, "LxM" = Male)
+      
+
+# fertility
+fertility_rates <- fertility_rates |> 
+  left_join(
+    age5categories |> select(age1,agecat,"AgeGrp" = age),
+    by = c("age" = "age1")
+  ) |> 
+  reframe(
+    fx = mean(fx),
+    .by = c(Location, year, agecat, AgeGrp)
+  )
+
+# putting everything
+
+df <- pop |> 
+  as_tibble() |>
+  select("Location" = name, year, age,popM,popF) |> 
+  left_join(
+    age5categories |> select(agecat,"AgeGrp" = age),
+    by = c("age" = "AgeGrp")
+  ) |>
+  distinct() |> 
+  mutate(
+    agecat = case_when(agecat >= 85 ~ 85, TRUE ~ agecat),
+    age = case_when(agecat >= 85 ~ "85+", TRUE ~ age)
+  ) |> 
+  reframe(
+    popM = sum(popM),
+    popF = sum(popF),
+    .by = c(Location, year, age, agecat)
+  ) |> 
+  left_join(
+    lt,
+    by = join_by(Location, year, agecat)
+  ) |> 
+  select(-AgeGrp) |> 
+  left_join(
+    fertility_rates,
+    by = join_by(Location, year, agecat)
+  ) |> 
+    select(-AgeGrp) |> 
+  mutate(across(everything(), ~ replace_na(., 0)))
 
 ```
 
