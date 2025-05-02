@@ -23,13 +23,13 @@ source("codes/UNWPP_download.R")
 
 # Exercise 1
 
-We will choose data from the United Nations, World Population Prospects (Revision of 2024) for Calcasian countries.
+We will choose data from the United Nations, World Population Prospects (Revision of 2024) for Caucasian countries.
 
 ```{r}
 data("pop1")
 ```
 
-Let's handle with this data to get data just for Calcasian region
+Let's handle with this data to get data just for Caucasian region.
 
 ```{r ex1_handling_data}
 
