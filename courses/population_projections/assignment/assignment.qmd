@@ -545,7 +545,180 @@ Secondly, We can see a higher difference between projected population and the es
 
 # Exercise 3
 
-Use Sanan's code here!
+```{r}
+
+load("data/EDSD.lecture2.Rdata")
+
+#3.1 Cohort Component model 
+m <- nrow(dta.swe)
+sFx <- dta.swe$SFx; bFx <- dta.swe$bFx; NFx <- dta.swe$NFx
+## change NA to 0 in bFx and remove NA from sFx
+bFx[is.na(bFx)] <- 0
+sFx <- sFx[!is.na(sFx)]
+## create empty Leslie matrix
+L <- matrix(0,m,m)
+## assign bFx and sFx
+L[1,] <- bFx
+diag(L[-1,]) <- sFx
+L[m,m] <- sFx[m-1]
+## matrix projection and comparison
+NFx5.matrix <- c(L%*%NFx)
+NFx5.manual <- dta.swe$NFx5
+all.equal(NFx5.matrix,NFx5.manual)
+
+
+#Incorporating male
+m <- nrow(dta.swe)
+sMx <- dta.swe$SMx; bMx <- dta.swe$bMx; NMx <- dta.swe$NMx
+## change NA to 0 in bFx and remove NA from sFx
+bMx[is.na(bMx)] <- 0
+sMx <- sMx[!is.na(sMx)]
+
+## create Bm and Leslie matrixes
+BM <- matrix(0,m,m)
+BM[1,] <- bMx
+
+LM <- matrix(0,m,m)
+diag(LM[-1,]) <- sMx
+LM[m,m] <- sMx[m-1]
+
+
+## putting male and females together
+ZEROS <- diag(0,m)
+Lup <- cbind(L,ZEROS)
+Ldown <- cbind(BM,LM)
+L_all <- rbind(Lup,Ldown)
+
+## matrix projection and comparison
+Nx <- c(NFx,NMx)
+Nx5.matrix <- c(L_all%*%Nx)
+NFx5.manual <- dta.swe$NFx5
+NMx5.manual <- dta.swe$NMx5
+all.equal(NFx5.manual,Nx5.matrix[1:m]) ## [1] TRUE
+all.equal(NMx5.manual,Nx5.matrix[1:m+m]) ## [1] TRUE
+
+## function to project several periods
+pop.proj.v2 <- function(x,AgeGroup,NFx,sFx,bFx,NMx,sMx,bMx,n){
+  ## number of age groups
+  m <- length(x); m2 <- m*2
+  ## female Leslie matrix
+  LF <- matrix(0,m,m)
+  LF[1,] <- bFx
+  diag(LF[-1,]) <- sFx
+  LF[m,m] <- sFx[m-1]
+  ## male Leslie matrix
+  BM <- LM <- matrix(0,m,m)
+  BM[1,] <- bMx
+  diag(LM[-1,]) <- sMx
+  LM[m,m] <- sMx[m-1]
+  ## putting them together
+  ZEROS <- diag(0,m)
+  Lup <- cbind(LF,ZEROS)
+  Ldown <- cbind(BM,LM)
+  L <- rbind(Lup,Ldown)
+  ## create population matrix
+  N <- matrix(0,m2,n+1)
+  N[,1] <- c(NFx,NMx)
+  for (i in 1:n){
+    N[,i+1] <- L%*%N[,i]
+  }
+  out <- cbind(data.frame(x=rep(x,2),AgeGroup=rep(AgeGroup,2),
+                          sex=rep(c("Females","Males"),each=m)),N)
+  return(out)
+}
+
+my.proj <- pop.proj.v2(x=dta.swe$Age,AgeGroup=dta.swe$AgeGroup,NFx=NFx,sFx=sFx,bFx=bFx,
+                       NMx=NMx,sMx=sMx,bMx=bMx,n=20)
+## long data
+dta.swe.l <- my.proj %>%
+  pivot_longer(-c(x,AgeGroup,sex),names_to = "period",values_to = "population") %>%
+  mutate(period=as.numeric(period),
+         Year=1993 + (period-1)*5,
+         YearF=as.factor(Year))
+
+# ## plotting
+# ggplot(dta.swe.l,aes(x=AgeGroup,y=population,fill=YearF)) +
+#   geom_bar(data = subset(dta.swe.l, period %in% c(1,2,21) & sex == "Males"),
+#            stat = "identity",position = "dodge",color = "black",mapping = aes(y = -population)) +
+#   geom_bar(data = subset(dta.swe.l, period %in% c(1,2,21) & sex == "Females"),
+#            stat = "identity",position = "dodge",color = "black") +
+#   coord_flip() +
+#   theme_bw() +
+#   ggtitle("Swedish population") +
+#   scale_y_continuous(limits=c(-3.5e5,3.5e5),
+#                      breaks = seq(-4e5,4e5,1e5),
+#                      labels = abs(seq(-4e5,4e5,1e5))) +
+#   scale_fill_brewer(name="Year",palette = "Blues", direction = -1) +
+#   geom_text(data = subset(dta.swe.l, period %in% c(1)),
+#             aes(y = max(population)/1.25, x = 17, label="Females"),size=7) +
+#   geom_text(data = subset(dta.swe.l, period %in% c(1)),
+#             aes(y = -max(population)/1.25, x = 17, label="Males"),size=7)
+
+
+CCM <- dta.swe.l |> filter(Year==2003)
+
+#Hamilton-Perry method
+load("data/EDSD.lecture2.Rdata")
+
+hp <- dta.swe |> select(Age,AgeGroup,NFx,NMx,NFx5,NMx5) |> 
+  mutate(tot=NFx+NMx,
+         tot5=NFx5+NMx5)
+
+hp <- as_tibble(hp) %>%
+  mutate(CCRx=tot5/lag(tot), 
+         tot10=CCRx*lag(tot5)) 
+
+# for the last age group
+hp <- hp |> mutate(CCRx=case_when(
+  Age==85~ tot5/(tot+lag(tot)),
+  .default=CCRx))
+
+hp <- hp |> mutate(tot10=case_when(
+  Age==85~ CCRx*(tot5+lag(tot5)),
+  .default=tot10))
+
+# for the first age group
+total5F_15_45 <- sum(hp$NFx5[hp$Age >= 15 & hp$Age < 45], na.rm = TRUE)
+
+#we need to calculate N of woman in childbearing age for time 10 
+hp <-hp %>%
+  mutate(CCRxF=NFx5/lag(NFx), 
+         NFx10=CCRxF*lag(NFx5)) 
+total10F_15_45 <- sum(hp$NFx10[hp$Age >= 15 & hp$Age < 45], na.rm = TRUE)
+
+hp <- hp |> mutate(tot10=case_when(
+  Age==0~ ((NFx5+NMx5)/total10F_15_45)*total10F_15_45,
+  .default=tot10))
+
+CCM <- CCM |> pivot_wider(names_from = sex,
+                          values_from = population) 
+CCM <- CCM|> 
+  mutate(tot_2003_CCM = Females+Males) |> 
+  select(x,AgeGroup,tot_2003_CCM)
+CCM <- CCM |> 
+  rename("Age"=x)
+hp <- hp |> select(Age,tot10)
+
+CCM <- CCM |> left_join(hp,
+                        by=join_by(Age)) |> 
+  rename("tot_2003_HP"=tot10)
+CCM <- CCM |> pivot_longer(cols = tot_2003_CCM:tot_2003_HP,
+                           names_to = "method",
+                           values_to = "Pop")
+
+# plotting
+ggplot(CCM,aes(x=AgeGroup,y=Pop,fill=factor(method))) +
+  geom_col(position="dodge")+
+  labs(x = "Age Group", y = "Population count", fill = "Method",
+       title = "Projected population size by age groups for 2003 using CCM and HP") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle =45,hjust=1))
+
+
+```
+
+The projections from two methods mostly align with each other except the first age group. The Cohort-Change ratios (CCR) that is used in Hamilton-Perry (HP) method is similar to survivorship ratios that used in CCM method. Therefore, it is not surprising that we get more-or-less same results for the majority of the age groups. The only difference is what we observe in first age group. Age-specific fertility rates are used for CCM - that takes into account the age distribution of women in childbearing age groups and childbearing rates over different age groups. While Child-Woman birth ratio used in HP cannot those into account since it is calculated as follows: $$CWR = \frac{N_0^F(t)}{_{30}N^{F}_{15}(t)}$$
+
 
 # Exercise 5
 
