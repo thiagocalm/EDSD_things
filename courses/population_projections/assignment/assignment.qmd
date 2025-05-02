@@ -154,6 +154,10 @@ As expected, the one using the growth rates calculated using the 10 years of dif
 
 **Take the population for any country (for example, use data from the HMD), as well as data for person-years and fertility rates (for example, take data from HMD and HFD). Specifically, take these data 5 years before the last available date (e.g. if the last available year is 2020, take the data in 2015). Divide the population into 5-year age groups and project the population 5-year ahead for each sex separately. Plot and compare your results with the observed population in the last available data (e.g. in 2020). Are your projections close to the observed population? At what ages do you see larger differences? Briefly provide a motivation for this discrepancy**
 
+We will use the World Population Prospects (Revision 2024) data for Caucasus countries (Armenia, Azerbaijan and Georgia). For that, we will choose as last period the year of 2020 and we will project the population from 2015 to 2020.
+
+Once it is not specified the method of projection in the exercise prompt, we chose Leslei matrix approach due to the easier way to be implemented comparing to cohort-component method (CCM).
+
 ```{r}
 
 # Downloading data from wpp website to have life table and age-specific fertility rates
@@ -536,3 +540,58 @@ PopProj |>
 Two main aspects can be standed out based on the ratio between these populations. Firstly, we see that our projection is overestimating the number of children between 0-4 years old. Once we are keeping constant the fertility rates observed in 2015, we are not taking into account the recent trends observed regarding this component for these countries. In addition, a share of this difference observed can also be affected by Covid-19 effects on births in 2020, contributing for the overestimation of our projection.
 
 Secondly, We can see a higher difference between projected population and the estimated one in old ages. On the one hand, this difference is due to the changes in mortality observed between 2015-2020. Once mortality has kept constant in this projection interval, it would be expected that the projected population would be higher in 2020 than the estimated one by UN. However, for the female population we see a different trend, with lower population for estimated one comparing to the one projected. Among other factors, it can be due to the fact we have a small amount of people in old ages in these countries, what can generate these variations.
+
+
+# Exercise 3
+
+Use Sanan's code here!
+
+# Exercise 5
+
+**Take again the population that you used for Exercise #2. Project the population for 5 years ahead, but this time use matrix formulas. Compare your results with the projections that you obtained in Exercise #2. Are they the same? Then, project your chosen population by sex for n = 20 periods ahead and show your results.**
+
+Once we used the Leslei approach for the exercise 2, in this exercise we will continue the population projection for 20 intervals (100 years ahead).
+
+To project the population from 2015 to 2115, we will use the same R function created in the exercise 2 (we thanks to Marilia, who structured this function). The R implementation is described below.
+
+```{r}
+## Projecting population from 2015 to 2115
+
+# looping it
+PopProj20 = NULL
+countries = df_2015$Location |> unique()
+for(i in seq_along(countries)){
+  cnt = countries[i] # selecting the country name for this time
+  proj <- PopProj_Leslei(
+    x=df_2015$agecat[df_2015$Location == cnt],
+    AgeGroup=df_2015$age[df_2015$Location == cnt],
+    NFx=df_2015$popF[df_2015$Location == cnt],
+    sFx=df_2015$SxF[df_2015$Location == cnt],
+    bFx=df_2015$bxF[df_2015$Location == cnt],
+    NMx=df_2015$popM[df_2015$Location == cnt],
+    sMx=df_2015$SxM[df_2015$Location == cnt],
+    bMx=df_2015$bxM[df_2015$Location == cnt],
+    n=20
+  )
+  
+  if(i == 1){
+    PopProj20 <- cbind(
+      country = rep(cnt, nrow(proj)),
+      proj
+    )
+  } else{
+    PopProj20 <- rbind(
+      PopProj20,
+      cbind(
+      country = rep(cnt, nrow(proj)),
+      proj
+    )
+  )
+  }
+}
+
+### Vizualization
+
+
+```
+
