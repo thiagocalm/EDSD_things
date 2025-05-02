@@ -7,14 +7,17 @@ editor_options:
 ---
 
 ```{r packages}
-library(pacman)
-p_load(tidyverse, wpp2024)
-# external functions
-source("codes/UNWPP_data.R")
-source("codes/UNWPP_download.R")
 # general settings
 rm(list = ls()) # removing all itens of environment
 invisible(gc()) # clealing the storage memory of the computer
+
+# packages
+library(pacman)
+p_load(tidyverse, wpp2024)
+
+# external functions
+source("codes/UNWPP_data.R")
+source("codes/UNWPP_download.R")
 ```
 
 # Exercise 1
@@ -60,6 +63,8 @@ growth_rates <- pop1 |>
     r_10y = PopProj_growthrate(NT = `2019`, N0 = `2009`,time = 10),
     .by = name
   )
+
+growth_rates
 
 ```
 
@@ -135,8 +140,6 @@ result = pop1 |>
     by = join_by(name)
   )
 
-print(result)
-
 result |> 
   mutate(
     diff_r5y = NProj_2019_r5y - Pop_observed_2019,
@@ -149,15 +152,16 @@ As expected, the one using the growth rates calculated using the 10 years of dif
 
 # Exercise 2
 
+**Take the population for any country (for example, use data from the HMD), as well as data for person-years and fertility rates (for example, take data from HMD and HFD). Specifically, take these data 5 years before the last available date (e.g. if the last available year is 2020, take the data in 2015). Divide the population into 5-year age groups and project the population 5-year ahead for each sex separately. Plot and compare your results with the observed population in the last available data (e.g. in 2020). Are your projections close to the observed population? At what ages do you see larger differences? Briefly provide a motivation for this discrepancy**
 
 ```{r}
 
-# Downloading the data
+# Downloading data from wpp website to have life table and age-specific fertility rates
 
 download_wpp24(indicator = "mortality")
 download_wpp24(indicator = "fertility")
 
-# Importing data from UNWPP
+# Life tables from wpp website
 
 lt_female <- UNWPP_data(
   country = c("Azerbaijan","Georgia","Armenia"),
@@ -179,7 +183,7 @@ lt <- bind_rows(lt_female, lt_male) |>
   filter(year %in% c(2015,2020)) |> 
   select(Location, Sex, year, AgeGrp, age, Lx, lx, mx)
 
-# fertility
+# age-specific fertility rates from WPP website
 
 fertility_rates <- UNWPP_data(
   country = c("Azerbaijan","Georgia","Armenia"),
@@ -194,8 +198,7 @@ fertility_rates <- fertility_rates |>
 
 # population
 
-library(wpp2024)
-data("popAge5dt")
+data("popAge5dt") # importing data from WPP (wpp2024 package)
 
 pop <- popAge5dt |> 
   filter(
@@ -204,44 +207,52 @@ pop <- popAge5dt |>
   )
 
 ## Handling the data to have 5 years age group
-data("age5categories") # let's use this data as an auxiliar one
+data("age5categories") # let's use this dataset as an auxiliary one
 
 # mortality
 lt <- lt |> 
   select(-AgeGrp) |>
+  # join auxiliary dataset with description of age groups
   left_join(
     age5categories |> select(age1,agecat,"AgeGrp" = age),
     by = c("age" = "age1")
   ) |>
+  # changing last age group to become 85+
   mutate(
     agecat = case_when(agecat >= 85 ~ 85, TRUE ~ agecat),
     AgeGrp = case_when(agecat >= 85 ~ "85+", TRUE ~ AgeGrp)
   ) |>
+  # summing up values for 5-years age group
   reframe(
     mx = mean(mx, na.rm = TRUE),
     lx = lx,
     Lx = sum(Lx),
     .by = c(Location, Sex, year, agecat, AgeGrp)
   ) |>
+  # adjusting for last age group data
   mutate(
     Lx = case_when(agecat == 85 ~ lx/mx, TRUE ~ Lx)
   ) |> 
+  # adjusts to have a dataframe with just one value for each age group
   arrange(Location, Sex, year, agecat, desc(lx)) |> 
   mutate(
     rank = row_number(),
     .by = c(Location, Sex, year, agecat)
   ) |> 
   filter(rank == 1) |> 
+  # excluding undesired variables
   select(-rank, -mx, -lx) |> 
   pivot_wider(names_from = Sex, values_from = Lx) |> 
   select(everything(), "LxF" = Female, "LxM" = Male)
       
 # fertility
 fertility_rates <- fertility_rates |> 
+  # join auxiliary dataset with description of age groups
   left_join(
     age5categories |> select(age1,agecat,"AgeGrp" = age),
     by = c("age" = "age1")
   ) |> 
+  # taking the average of asfr for each group
   reframe(
     fx = mean(fx),
     .by = c(Location, year, agecat, AgeGrp)
@@ -252,6 +263,7 @@ fertility_rates <- fertility_rates |>
 df <- pop |> 
   as_tibble() |>
   select("Location" = name, year, age,popM,popF) |> 
+  # adding auxiliary dataset with age groups
   left_join(
     age5categories |> select(agecat,"AgeGrp" = age),
     by = c("age" = "AgeGrp")
@@ -261,16 +273,19 @@ df <- pop |>
     agecat = case_when(agecat >= 85 ~ 85, TRUE ~ agecat),
     age = case_when(agecat >= 85 ~ "85+", TRUE ~ age)
   ) |> 
+  # aggregating population in 5-years age groups
   reframe(
     popM = sum(popM),
     popF = sum(popF),
     .by = c(Location, year, age, agecat)
   ) |> 
+  # join LT dataset
   left_join(
     lt,
     by = join_by(Location, year, agecat)
   ) |> 
   select(-AgeGrp) |> 
+  # join ASFR dataset
   left_join(
     fertility_rates,
     by = join_by(Location, year, agecat)
@@ -280,7 +295,7 @@ df <- pop |>
 
 ```
 
-Projecting the population from 2015 to 2020.
+Projecting the population from 2015 to 2020 for each of these countries.
 
 ```{r}
 ## function to project several periods
@@ -393,6 +408,11 @@ for(i in seq_along(countries)){
   }
 }
 
+```
+
+Now, let's evaluate the results comparing the baseline population (2015) and the projected one for 2020.
+
+```{r}
 # plot
 
 # projected
@@ -404,34 +424,115 @@ PopProj |>
   aes(x = x, y = pop, color = as.factor(year)) +
   geom_point(size = 3, alpha = .5) +
   geom_line(linewidth = 1.3) +
-  lemon::facet_rep_grid(sex~country,repeat.tick.labels = TRUE) +
-  theme_light()
+  labs(
+    color = "",
+    y = "Population (x 1,000)",
+    x = "5-years age group",
+    caption = "Source: United Nations, DESA. World Population Prospects, Revision 2024.",
+    title = "Estimated (2015) and forwards projected population (2020) for Caucasian countries"
+  ) +
+  scale_color_brewer(palette = "Set2") +
+  lemon::facet_rep_grid(sex~country,repeat.tick.labels = TRUE, scales = "free_y") +
+  theme_light() +
+  theme(
+    plot.title = element_text(face = "bold", colour = "grey44"),
+    axis.title = element_text(face = "bold", colour = "grey44"),
+    strip.text = element_text(face = "bold", colour = "grey44"),
+    axis.text = element_text(colour = "grey44"),
+    plot.caption = element_text(colour = "grey44", hjust = 1),
+    legend.position = "bottom"
+  )
 
+```
+
+It seems that the projected population follows the observed trends in the baseline population. When we analyse the age structure for each country and sex, we conclude that this echoes observed in the baseline populations are still being observed in the projected ones.
+
+Now we can compare these results with the estimated population in WPP 2024 revision. First, let's assess the comparison in absolute terms.
+
+```{r}
 # projected x observed
 
 df_2020 <- df |> 
   filter(year == 2020) |> 
   select("country" = Location, year, "x" = agecat, "Males" = popM, "Females" = popF) |> 
   pivot_longer(Males:Females, names_to = "sex", values_to = "EstimatedPop")
-  
 
-PopProj |> 
-  as_tibble() |> 
-  rename(`2015` = `1`, `2020` = `2`) |> 
+PopProj |>
+  as_tibble() |>
+  rename(`2015` = `1`, `2020` = `2`) |>
   pivot_longer(`2015`:`2020`, names_to = "year",values_to = "ProjectedPop") |>
-  filter(year == 2020) |> 
+  filter(year == 2020) |>
   left_join(
     df_2020,
     by = join_by(country, x, sex)
-  ) |> 
-  pivot_longer(c(ProjectedPop,EstimatedPop), names_to = "type", values_to = "N") |> 
+  ) |>
+  pivot_longer(c(ProjectedPop,EstimatedPop), names_to = "type", values_to = "N") |>
+  # filter(country != "Azerbaijan") |>
   ggplot() +
   aes(x = x, y = N, color = as.factor(type)) +
   geom_point(size = 3, alpha = .5) +
   geom_line(linewidth = 1.3) +
-  lemon::facet_rep_grid(sex~country,repeat.tick.labels = TRUE) +
-  theme_light()
-
+  labs(
+    color = "",
+    y = "Population (x 1,000)",
+    x = "5-years age group",
+    caption = "Source: United Nations, DESA. World Population Prospects, Revision 2024.",
+    title = "Estimated (2020) and forwards projected population (2020) for Caucasian countries"
+  ) +
+  scale_color_brewer(palette = "Set2") +
+  lemon::facet_rep_grid(sex~country,repeat.tick.labels = TRUE, scales = "free_y") +
+  theme_light() +
+  theme(
+    plot.title = element_text(face = "bold", colour = "grey44"),
+    axis.title = element_text(face = "bold", colour = "grey44"),
+    strip.text = element_text(face = "bold", colour = "grey44"),
+    axis.text = element_text(colour = "grey44"),
+    plot.caption = element_text(colour = "grey44", hjust = 1),
+    legend.position = "bottom"
+  )
 
 ```
 
+Overall, we observe similar age composition and size in respect to the projected population and estimated one. In Azerbaijan, absolute differences can be standed out due to the fact they have the biggest population size.
+
+Another way to assess the consistency of the population projection without differences due to population size is based on the ratio between projected population in 2020 and the estimated population for the same calendar year (2020) from WPP estimates. The figure below show this relationship between both values for each country and sex.
+
+```{r}
+PopProj |>
+  as_tibble() |>
+  rename(`2015` = `1`, `2020` = `2`) |>
+  pivot_longer(`2015`:`2020`, names_to = "year",values_to = "ProjectedPop") |>
+  filter(year == 2020) |>
+  left_join(
+    df_2020,
+    by = join_by(country, x, sex)
+  ) |> 
+  mutate(ratio = ProjectedPop/EstimatedPop) |> 
+  ggplot() +
+  aes(x = x, y = ratio, color = as.factor(country)) +
+  geom_point(size = 3, alpha = .5) +
+  geom_line(linewidth = 1.3) +
+  geom_hline(yintercept = 1, color = "black",linetype = "dashed", linewidth = 1.3) +
+  labs(
+    color = "",
+    y = "[Projected Population, 2020] / [WPP Estimated Population, 2020]",
+    x = "5-years age group",
+    caption = "Source: United Nations, DESA. World Population Prospects, Revision 2024.",
+    title = "Ratio between projected and estimated population (2020) for Caucasian countries"
+  ) +
+  scale_color_brewer(palette = "Set2") +
+  lemon::facet_rep_grid(.~sex,repeat.tick.labels = TRUE, scales = "free_y") +
+  theme_light() +
+  theme(
+    plot.title = element_text(face = "bold", colour = "grey44"),
+    axis.title = element_text(face = "bold", colour = "grey44"),
+    strip.text = element_text(face = "bold", colour = "grey44"),
+    axis.text = element_text(colour = "grey44"),
+    plot.caption = element_text(colour = "grey44", hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+Two main aspects can be standed out based on the ratio between these populations. Firstly, we see that our projection is overestimating the number of children between 0-4 years old. Once we are keeping constant the fertility rates observed in 2015, we are not taking into account the recent trends observed regarding this component for these countries. In addition, a share of this difference observed can also be affected by Covid-19 effects on births in 2020, contributing for the overestimation of our projection.
+
+Secondly, We can see a higher difference between projected population and the estimated one in old ages. On the one hand, this difference is due to the changes in mortality observed between 2015-2020. Once mortality has kept constant in this projection interval, it would be expected that the projected population would be higher in 2020 than the estimated one by UN. However, for the female population we see a different trend, with lower population for estimated one comparing to the one projected. Among other factors, it can be due to the fact we have a small amount of people in old ages in these countries, what can generate these variations.
