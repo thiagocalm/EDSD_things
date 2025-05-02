@@ -1,5 +1,6 @@
 ---
 title: "Population Projection"
+author: Sanan Abdulayev, João Victor Antunes, Gilbert Habaasa, Thiago C. Almeida
 format: pdf
 editor: visual
 editor_options: 
@@ -624,12 +625,16 @@ PopProj20 |>
   lemon::facet_rep_grid(.~country,repeat.tick.labels = TRUE, scales = "free_y") +
   theme_light() +
   geom_text(
-    aes(y = max(N)/1.25, x = 80, label='Females', color = "Black"),
-    size=6
+    aes(y = max(N)/1.25, x = 80, label='Females'),
+    color = "grey44",
+    size=6,
+    show.legend = FALSE
   ) +
   geom_text(
-    aes(y = -max(N)/1.25, x = 80, label='Males', color = "Black"),
-    size=6
+    aes(y = -max(N)/1.25, x = 80, label='Males'),
+    color = "grey44",
+    size=6,
+    show.legend = FALSE
   ) +
   theme(
     plot.title = element_text(face = "bold", colour = "grey44"),
@@ -642,3 +647,4 @@ PopProj20 |>
 
 ```
 
+Once we kept constant fertility and mortality rates over all the projected period, we can interpret our population 100 years ahead of the baseline population as a stable population closed to migration. We observe that the echoes in the baseline population disappeared in the last projected interval population for all of the countries. It is due to the ergodic property associated with stable population model. For all countries, we observe an older age composition also associated with the fertility and mortality schedule used over all projected period.
