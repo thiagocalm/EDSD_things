@@ -1,0 +1,836 @@
+---
+title: "EDSD 2024–2025: Population Projection's Assignment"
+author:
+  - "Sanan Abdulayev"
+  - "João Victor A. Lopes"
+  - "Gilbert Habaasa"
+  - "Thiago C. Almeida"
+date: ""
+format:
+  pdf:
+    keep-tex: true
+    header-includes: |
+      \usepackage{fancyhdr}
+      \usepackage{graphicx}
+      \usepackage{fvextra}
+      % redefine Highlighting para wrap de código
+      \DefineVerbatimEnvironment{Highlighting}{Verbatim}{
+        commandchars=\\\{\},
+        breaklines=true,
+        breakanywhere=true,
+        fontsize=\small
+      }
+      \pagestyle{fancy}
+      \fancyhead[R]{\includegraphics[width=2cm]{edsd_logo.png}}
+      \fancyhead[L]{Instructor: Marília Nepomuceno}
+      \fancyfoot[C]{}
+editor: visual
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r packages}
+# general settings
+rm(list = ls()) # removing all itens of environment
+invisible(gc()) # clealing the storage memory of the computer
+
+# packages
+library(pacman)
+p_load(tidyverse, wpp2024, here, knitr, kableExtra)
+
+# external functions
+source(here("codes", "UNWPP_data.R"))
+source(here("codes", "UNWPP_download.R"))
+```
+
+# Exercise 1
+
+**Take the population time-series for any country (data from HMD or UN), and answer to the following questions.**
+
+We used data from the United Nations' World Population Prospects (2024 Revision) for Caucasus countries.
+We worked with this data to extract information only for the Caucasus region.
+
+```{r}
+data("pop1")
+
+pop1 <- pop1 |>
+  as_tibble() |> 
+  filter(name %in% c("Azerbaijan",
+                     "Georgia",
+                     "Armenia")) |> 
+  pivot_longer(`1949`:`2023`, names_to = "year", values_to = "N") |> 
+  filter(year %in% c(2009, 2014, 2019))
+
+```
+
+**1. Estimate the population growth rate using two different time intervals (e.g. the last 5 and the last 10 years).**
+
+To estimate the exponential growth rate, we employ the following equation:
+
+$$r = \frac{ln(\frac{N(T)}{N(0)})}{T}$$
+
+where $T$ represents the number of years between time $0$ and time $T$.
+
+```{r}
+# function to calculate the exponential growth rate
+
+PopProj_growthrate <- function(N0, NT, time){
+  r = log(NT / N0) / time}
+
+# Growth rates
+growth_rates <- pop1 |> 
+  pivot_wider(names_from = year, values_from = N) |> 
+  reframe(
+    r_5y = PopProj_growthrate(NT = `2019`, N0 = `2014`, time = 5),
+    r_10y = PopProj_growthrate(NT = `2019`, N0 = `2009`, time = 10),
+    .by = name)
+
+growth_rates |> 
+  rename(
+    `Country` = name,
+    `5-year growth rate` = r_5y,
+    `10-year growth rate` = r_10y) |> 
+  kable(digits = 4, 
+        align = "c") |> 
+  kable_styling(full_width = F, position = "center")
+```
+
+**2. Project the population 25-years ahead using the constant exponential model and the two different growth rates**
+
+To project the population of each country, we can use the following equation:  
+
+$$
+N(t) = N(0) \cdot e^{rt}
+$$  
+where \( r \) is the growth rate.
+
+For this projection, we assume a different growth rate for each country.
+
+```{r}
+
+pop1 |> 
+  left_join(
+    growth_rates,
+    by = join_by(name)) |> 
+  filter(year == 2019) |> 
+  summarise(
+    NProj_25y_r5y = N * exp(r_5y * 25),
+    NProj_25y_r10y = N * exp(r_10y * 25),
+    .by = name) |> 
+  rename(
+    `Country` = name,
+    `Population projected \n (5-year r)` =  NProj_25y_r5y,
+    `Population projected \n (10-year r)` = NProj_25y_r10y) |> 
+  kable(digits = 0, align = "c",
+        caption = "Projected population in 25 years using 5-year and 10-year growth rates") |> 
+  kable_styling(full_width = F, position = "center")
+
+```
+
+**3. Make an assumption about one of the demographic components, and compare this projection with the baseline one.**
+
+As the growth rate reflects the combined effects of fertility, mortality, and migration, it can be expressed in terms of crude rates as follows:  
+$$
+r = b - d + m
+$$  
+where \( b \) is the crude birth rate, \( d \) is the crude death rate, and \( m \) is the crude net migration rate.
+
+It is important to note that our growth rates remain constant over time. Therefore, in order to maintain the assumption of exponential growth with a constant rate, we must assume that any change in the growth rate occurs.
+
+In this scenario, we assume that the growth rate decreases by 0.08 percentage points due to an increase in mortality.
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+pop1 |> 
+  left_join(
+    growth_rates,
+    by = join_by(name)) |> 
+  filter(year == 2019) |> 
+  mutate(
+    r_5y_adj = r_5y - 0.0008,
+    r_10y_adj = r_10y - 0.0008) |> 
+  summarise(
+    NProj_25y_r5y = N * exp(r_5y * 25),
+    NProj_25y_r10y = N * exp(r_10y * 25),
+    NProj_25y_r5y_adj = N * exp(r_5y_adj * 25),
+    NProj_25y_r10y_adj = N * exp(r_10y_adj * 25),
+    .by = name) |> 
+  pivot_longer(
+    cols = starts_with("NProj"),
+    names_to = "scenario",
+    values_to = "value") |> 
+  mutate(
+    growth = case_when(
+      str_detect(scenario, "r5y") ~ "5-year \n rate",
+      str_detect(scenario, "r10y") ~ "10-year \n rate"),
+    adjusted = if_else(str_detect(scenario, "adj"), "Adjusted", "Not Adjusted")) |> 
+  ggplot(aes(x = growth, y = value / 1000, fill = adjusted)) +
+  geom_col(position = position_dodge()) +
+  facet_wrap(~ name) +
+  labs(x = NULL, y = "Population (per thousands)", fill = NULL) +
+  scale_fill_brewer(palette = "Set1") +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(face = "bold"),
+        legend.position = "top")
+
+```
+
+**4. Assume that your observed data ends 10 years before the last two available data point. Project the population 10-year ahead with the two growth rates estimated in point 1. which of the two projections is more accurate?**
+
+```{r}
+
+pop1 |> 
+  left_join(
+    growth_rates,
+    by = join_by(name)) |> 
+  filter(year == 2009) |> 
+  summarise(
+    NProj_2019_r5y = N * exp(r_5y * 10),
+    NProj_2019_r10y = N * exp(r_10y * 10),
+    .by = name) |> 
+  left_join(
+    pop1 |> filter(year == 2019) |> select(name, "Pop_observed_2019" = N),
+    by = join_by(name)) |> 
+  mutate(diff_r5y = NProj_2019_r5y - Pop_observed_2019) |> 
+  rename(`Country` = name,
+    `Projected ('19, r5)` = NProj_2019_r5y,
+    `Projected ('19, r10)` = NProj_2019_r10y,
+    `Observed ('19)` = Pop_observed_2019,
+    `Difference (r5)` = diff_r5y) |>
+  kable(digits = 0, align = "c") |> 
+  kable_styling(full_width = FALSE, position = "center")
+
+```
+
+As expected, the projection based on the 10-year growth rate is more accurate, as it matches the estimated population for 2019.
+
+# Exercise 2
+
+**Take the population for any country (for example, use data from the HMD), as well as data for person-years and fertility rates (for example, take data from HMD and HFD). Specifically, take these data 5 years before the last available date (e.g. if the last available year is 2020, take the data in 2015). Divide the population into 5-year age groups and project the population 5-year ahead for each sex separately. Plot and compare your results with the observed population in the last available data (e.g. in 2020). Are your projections close to the observed population? At what ages do you see larger differences? Briefly provide a motivation for this discrepancy**
+
+This analysis uses data from the World Population Prospects (2024 Revision) for the Caucasus countries: Armenia, Azerbaijan, and Georgia. The year 2020 is defined as the final point of the projection period, and the population is projected from 2015 to 2020.
+Since the exercise prompt does not specify a projection method, the Leslie matrix approach is adopted, as it is easier to implement compared to the cohort-component method (CCM).
+
+```{r, echo = TRUE, results = "hide", warning=FALSE}
+
+# downloading data from wpp (life table and age-specific fertility rates)
+
+#download_wpp24(indicator = "mortality")
+#download_wpp24(indicator = "fertility")
+
+# life tables
+lt_female <- UNWPP_data(
+  country = c("Azerbaijan", "Georgia", "Armenia"),
+  start_year = 2015,
+  end_year = 2020,
+  sex = "Female",
+  indicator = "mortality")
+
+lt_male <- UNWPP_data(
+  country = c("Azerbaijan", "Georgia", "Armenia"),
+  start_year = 2015,
+  end_year = 2020,
+  sex = "Male",
+  indicator = "mortality")
+
+lt <- bind_rows(lt_female, lt_male) |> 
+  filter(year %in% c(2015, 2020)) |> 
+  select(Location, Sex, year, AgeGrp, age, Lx, lx, mx)
+
+# age-specific fertility rates
+fertility_rates <- UNWPP_data(
+  country = c("Azerbaijan", "Georgia", "Armenia"),
+  start_year = 2015,
+  end_year = 2020,
+  sex = "Female",
+  indicator = "fertility") |> 
+  filter(year %in% c(2015, 2020))
+
+# population
+data("popAge5dt") # importing data from WPP (wpp2024 package)
+
+pop <- popAge5dt |> 
+  filter(
+    name %in% c("Azerbaijan", "Georgia", "Armenia"),
+    year %in% c(2015, 2020))
+
+data("age5categories") # auxiliar data to get age by years age groups
+
+# mortality
+lt <- lt |> 
+  select(-AgeGrp) |>
+  # join auxiliary dataset with description of age groups
+  left_join(
+    age5categories |> select(age1,agecat,"AgeGrp" = age),
+    by = c("age" = "age1")) |>
+  # changing last age group to become 85+
+  mutate(
+    agecat = case_when(agecat >= 85 ~ 85, TRUE ~ agecat),
+    AgeGrp = case_when(agecat >= 85 ~ "85+", TRUE ~ AgeGrp)) |>
+  # summing up values for 5-years age group
+  reframe(
+    mx = mean(mx, na.rm = TRUE),
+    lx = lx,
+    Lx = sum(Lx),
+    .by = c(Location, Sex, year, agecat, AgeGrp)) |>
+  # adjusting for last age group data
+  mutate(
+    Lx = case_when(agecat == 85 ~ lx/mx, TRUE ~ Lx)) |> 
+  # adjusts to have a dataframe with just one value for each age group
+  arrange(Location, Sex, year, agecat, desc(lx)) |> 
+  mutate(
+    rank = row_number(),
+    .by = c(Location, Sex, year, agecat)) |> 
+  filter(rank == 1) |> 
+  # excluding undesired variables
+  select(-rank, -mx, -lx) |> 
+  pivot_wider(names_from = Sex, values_from = Lx) |> 
+  select(everything(), "LxF" = Female, "LxM" = Male)
+      
+# fertility
+fertility_rates <- fertility_rates |> 
+  # join auxiliary dataset with description of age groups
+  left_join(
+    age5categories |> select(age1,agecat,"AgeGrp" = age),
+    by = c("age" = "age1")) |> 
+  # taking the average of asfr for each group
+  reframe(
+    fx = mean(fx),
+    .by = c(Location, year, agecat, AgeGrp))
+
+# putting everything
+df <- pop |> 
+  as_tibble() |>
+  select("Location" = name, year, age,popM,popF) |> 
+  # adding auxiliary dataset with age groups
+  left_join(
+    age5categories |> select(agecat,"AgeGrp" = age),
+    by = c("age" = "AgeGrp")) |>
+  distinct() |> 
+  mutate(
+    agecat = case_when(agecat >= 85 ~ 85, TRUE ~ agecat),
+    age = case_when(agecat >= 85 ~ "85+", TRUE ~ age)) |> 
+  # aggregating population in 5-years age groups
+  reframe(
+    popM = sum(popM),
+    popF = sum(popF),
+    .by = c(Location, year, age, agecat)) |> 
+  # join LT dataset
+  left_join(
+    lt,
+    by = join_by(Location, year, agecat)) |> 
+  select(-AgeGrp) |> 
+  # join ASFR dataset
+  left_join(
+    fertility_rates,
+    by = join_by(Location, year, agecat)) |> 
+    select(-AgeGrp) |> 
+  mutate(across(everything(), ~ replace_na(., 0)))
+
+```
+
+The population is projected from 2015 to 2020 for each of these countries.
+
+```{r, echo = TRUE, results = "hide"}
+## function to project several periods
+PopProj_Leslei <- function(x, AgeGroup, NFx, sFx, bFx, NMx, sMx, bMx, n){
+  if(is.na(bFx[length(x)])){
+    bFx[length(x)] <- 0
+  }
+  if(is.na(bMx[length(x)])){
+    bMx[length(x)] <- 0
+  }
+  if(is.na(sFx[length(x)])){
+    sFx <- sFx[ - length(sFx)]
+  }
+  if(is.na(sMx[length(x)])){
+    sMx <- sFx[ - length(sMx)]
+  }
+  ## number of age groups
+  m <- length(x); m2 <- m * 2
+  ## female Leslie matrix
+  LF <- matrix(0, m, m)
+  LF[1, ] <- bFx
+  diag(LF[ - 1, ]) <- sFx
+  LF[m, m] <- sFx[m - 1]
+  ## male Leslie matrix
+  BM <- LM <- matrix(0, m, m)
+  BM[1, ] <- bMx
+  diag(LM[ - 1, ]) <- sMx
+  LM[m, m] <- sMx[m - 1]
+  ## putting them together
+  ZEROS <- diag(0, m)
+  Lup <- cbind(LF, ZEROS)
+  Ldown <- cbind(BM, LM)
+  L <- rbind(Lup, Ldown)
+  ## create population matrix
+  N <- matrix(0, m2 ,n + 1)
+  N[, 1] <- c(NFx, NMx)
+  for (i in 1:n){
+    N[, i + 1] <- L %*% N[, i]
+  }
+  out <- cbind(
+    data.frame(
+      x = rep(x, 2),
+      AgeGroup = rep(AgeGroup, 2),
+      sex = rep(c("Females", "Males"), each = m)), N)
+return(out)
+}
+
+# setting parameters for population projection
+SRB <- 1.05 # defining the sex ratio at birth
+fact.SRB.F <- 1 / (1 + SRB)
+fact.SRB.M <- SRB/(1 + SRB)
+l0 <- 100000
+L0 <- df |> 
+  filter(year == 2015, agecat == 0) |> 
+  select(Location, "LF0" = LxF, "LM0" = LxM)
+
+# creating survived births
+df_2015 <- df %>%
+  filter(year == 2015) |>
+  left_join(L0, by = join_by(Location)) |> 
+  mutate(
+    # Female survivorship ratio
+    SxF = lead(LxF)/LxF,
+    SxF = case_when(agecat != 80 ~ SxF,
+                   agecat == 80 ~ lead(LxF) / (LxF + lead(LxF))),
+    # male survivorship ratio
+    SxM = lead(LxM) / LxM,
+    SxM = case_when(agecat != 80 ~ SxM,
+                    agecat == 80 ~ lead(LxM) / (LxM + lead(LxM))),
+    # survived births by sex
+    bxF = fact.SRB.F * LF0 / (2*l0) * (fx + SxF*lead(fx)),
+    bxM=fact.SRB.M * LM0 / (2*l0) * (fx + SxF*lead(fx)), .by = c(Location, year))
+
+# looping it
+PopProj = NULL
+countries = df_2015$Location |> unique()
+for(i in seq_along(countries)){
+  cnt = countries[i] # selecting the country name for this time
+  proj <- PopProj_Leslei(
+    x = df_2015$agecat[df_2015$Location == cnt],
+    AgeGroup = df_2015$age[df_2015$Location == cnt],
+    NFx = df_2015$popF[df_2015$Location == cnt],
+    sFx = df_2015$SxF[df_2015$Location == cnt],
+    bFx = df_2015$bxF[df_2015$Location == cnt],
+    NMx = df_2015$popM[df_2015$Location == cnt],
+    sMx = df_2015$SxM[df_2015$Location == cnt],
+    bMx = df_2015$bxM[df_2015$Location == cnt],
+    n = 1)
+  
+  if(i == 1){
+    PopProj <- cbind(
+      country = rep(cnt, nrow(proj)),
+      proj)
+  }
+  else{
+    PopProj <- rbind(
+      PopProj,
+      cbind(
+      country = rep(cnt, nrow(proj)),
+      proj))
+  }
+}
+
+```
+
+Now, let's evaluate the results comparing the baseline population (2015) and the projected one for 2020.
+
+```{r}
+#| fig-width: 7
+#| fig-height: 6
+
+# projected
+PopProj |> 
+  as_tibble() |> 
+  rename(`2015` = `1`, `2020` = `2`) |> 
+  pivot_longer(`2015`:`2020`, names_to = "year", values_to = "pop") |> 
+  ggplot() +
+  aes(x = x, y = pop, fill = as.factor(year)) +
+  geom_col(position = "dodge") +
+  labs(
+    color = NULL,
+    y = "Population (per 1,000)",
+    x = "Age",
+    fill = NULL,
+    caption = "Source: United Nations, DESA. World Population Prospects, Revision 2024.",
+    title = "Population estimates for 2015 and projections \n for 2020 in the Caucasus countries") +
+  scale_fill_brewer(palette = "Set1") +
+  facet_grid(sex ~ country, scales = "free_x") +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(face = "bold")) + coord_flip()
+
+```
+
+The projected population appears to follow the trends observed in the baseline population. An analysis of the age structure by country and sex shows that the patterns present in the baseline population are still reflected in the projected figures.
+
+We now compare these results with the population estimates from the World Population Prospects (2024 Revision). First, we assess the comparison in absolute terms.
+
+```{r}
+#| fig-width: 7
+#| fig-height: 6
+
+# projected x observed
+
+df_2020 <- df |> 
+  filter(year == 2020) |> 
+  select("country" = Location, 
+         year, "x" = agecat, 
+         "Males" = popM, "Females" = popF) |> 
+  pivot_longer(Males:Females, names_to = "sex", values_to = "EstimatedPop")
+
+PopProj |>
+  as_tibble() |>
+  rename(`2015` = `1`, `2020` = `2`) |>
+  pivot_longer(`2015`:`2020`, names_to = "year", values_to = "ProjectedPop") |>
+  filter(year == 2020) |>
+  left_join(
+    df_2020,
+    by = join_by(country, x, sex)
+  ) |>
+  pivot_longer(c(ProjectedPop, EstimatedPop), 
+               names_to = "type", 
+               values_to = "N") |>
+  ggplot() +
+  aes(x = x, y = N, fill = as.factor(type)) +
+  geom_col(position = "dodge") +
+  labs(
+    fill = NULL,
+    y = "Population (per 1,000)",
+    x = "Age",
+    caption = "Source: United Nations, DESA. World Population Prospects, Revision 2024.",
+    title = NULL) +
+  scale_fill_brewer(palette = "Set1") +
+  facet_grid(sex ~ country, scales = "free_x") +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(face = "bold"),
+        legend.position = "top") + coord_flip()
+
+```
+
+Overall, we observe similar age composition and size in respect to the projected population and estimated one. In Azerbaijan, absolute differences can be standed out due to the fact they have the biggest population size.
+
+Another way to assess the consistency of the population projection without differences due to population size is based on the ratio between projected population in 2020 and the estimated population for the same calendar year (2020) from WPP estimates. The figure below show this relationship between both values for each country and sex.
+
+
+Overall, we observe a similar age composition and population size between the projected and estimated populations. In Azerbaijan, the absolute differences stand out, given that it has the largest population size among the three countries.
+
+Another way to assess the consistency of the population projections—while controlling for differences in population size—is to examine the ratio between the projected population in 2020 and the estimated population for the same year from the WPP 2024 Revision. The figure below shows this relationship by country and sex.
+
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+PopProj |>
+  as_tibble() |>
+  rename(`2015` = `1`, `2020` = `2`) |>
+  pivot_longer(`2015`:`2020`, names_to = "year",values_to = "ProjectedPop") |>
+  filter(year == 2020) |>
+  left_join(
+    df_2020,
+    by = join_by(country, x, sex)) |> 
+  mutate(ratio = ProjectedPop/EstimatedPop) |> 
+  ggplot() +
+  aes(x = x, y = ratio, color = as.factor(country)) +
+  geom_point() +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 1, color = "black",
+             linetype = "solid", 
+             linewidth = 1,
+             alpha = .8) +
+  labs(
+    color = NULL,
+    y = "[Projected Population, 2020] \n / [WPP Estimated Population, 2020]",
+    x = "Age",
+    caption = "Source: United Nations, DESA. World Population Prospects, Revision 2024.",
+    title = "Ratio between projected and \n estimated population (2020) for Caucasian countries") +
+  scale_color_brewer(palette = "Set1") +
+  facet_grid(~ sex, scales = "free_y") +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(face = "bold"),
+        legend.position = "top")
+```
+
+First, the projection appears to overestimate the number of children aged 0–4. Since we are keeping the fertility rates observed in 2015 constant, recent trends in fertility for these countries are not taken into account. In addition, part of this difference may be explained by the effects of COVID-19 on births in 2020, which likely contributed to the overestimation.
+
+Second, we observe larger discrepancies between the projected and estimated populations at older ages. On the one hand, this can be attributed to changes in mortality observed between 2015 and 2020. Since mortality was held constant throughout the projection interval, we would expect the projected population to be higher than the UN estimate for 2020. However, for the female population, we observe the opposite trend, with the estimated population being lower than the projected one. Among other factors, this could be related to the relatively small number of individuals in the oldest age groups in these countries, which can lead to greater variability.
+
+# Exercise 3
+**Take the Swedish population in 1993 and 1998 that we have derived in class with the cohort-component method (i.e. NFx and NFx5). Compute the projected population in 2003 using: i) the cohort-component method, and ii) the Hamilton-Perry method. What are the main differences between the two projected populations?**
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+load(here("courses", "population_projections", "assignment", "EDSD.lecture2.Rdata"))
+
+# 3.1 Cohort Component model 
+m <- nrow(dta.swe)
+sFx <- dta.swe$SFx; bFx <- dta.swe$bFx; NFx <- dta.swe$NFx
+## change NA to 0 in bFx and remove NA from sFx
+bFx[is.na(bFx)] <- 0
+sFx <- sFx[!is.na(sFx)]
+## create empty Leslie matrix
+L <- matrix(0, m, m)
+## assign bFx and sFx
+L[1, ] <- bFx
+diag(L[ - 1, ]) <- sFx
+L[m,m] <- sFx[m - 1]
+## matrix projection and comparison
+NFx5.matrix <- c(L %*% NFx)
+NFx5.manual <- dta.swe$NFx5
+all.equal(NFx5.matrix,NFx5.manual)
+
+# Incorporating male
+m <- nrow(dta.swe)
+sMx <- dta.swe$SMx; bMx <- dta.swe$bMx; NMx <- dta.swe$NMx
+## change NA to 0 in bFx and remove NA from sFx
+bMx[is.na(bMx)] <- 0
+sMx <- sMx[!is.na(sMx)]
+
+## create Bm and Leslie matrixes
+BM <- matrix(0, m, m)
+BM[1, ] <- bMx
+
+LM <- matrix(0, m, m)
+diag(LM[-1, ]) <- sMx
+LM[m, m] <- sMx[m - 1]
+
+## putting male and females together
+ZEROS <- diag(0, m)
+Lup <- cbind(L, ZEROS)
+Ldown <- cbind(BM, LM)
+L_all <- rbind(Lup, Ldown)
+
+## matrix projection and comparison
+Nx <- c(NFx, NMx)
+Nx5.matrix <- c(L_all %*% Nx)
+NFx5.manual <- dta.swe$NFx5
+NMx5.manual <- dta.swe$NMx5
+all.equal(NFx5.manual, Nx5.matrix[1:m]) ## [1] TRUE
+all.equal(NMx5.manual, Nx5.matrix[1:m + m]) ## [1] TRUE
+
+## function to project several periods
+pop.proj.v2 <- function(x, AgeGroup, NFx, sFx, bFx, NMx, sMx, bMx, n){
+  ## number of age groups
+  m <- length(x); m2 <- m * 2
+  ## female Leslie matrix
+  LF <- matrix(0, m ,m)
+  LF[1, ] <- bFx
+  diag(LF[ - 1, ]) <- sFx
+  LF[m,m] <- sFx[m - 1]
+  ## male Leslie matrix
+  BM <- LM <- matrix(0, m, m)
+  BM[1, ] <- bMx
+  diag(LM[ - 1, ]) <- sMx
+  LM[m,m] <- sMx[m - 1]
+  ## putting them together
+  ZEROS <- diag(0, m)
+  Lup <- cbind(LF, ZEROS)
+  Ldown <- cbind(BM, LM)
+  L <- rbind(Lup, Ldown)
+  ## create population matrix
+  N <- matrix(0, m2, n + 1)
+  N[,1] <- c(NFx, NMx)
+  for (i in 1:n){
+    N[, i + 1] <- L %*% N[, i]
+  }
+  out <- cbind(data.frame(x = rep(x, 2), AgeGroup = rep(AgeGroup, 2),
+                          sex = rep(c("Females", "Males"), each = m)), N)
+  return(out)
+}
+
+my.proj <- pop.proj.v2(x = dta.swe$Age, AgeGroup = dta.swe$AgeGroup, NFx = NFx, sFx = sFx, bFx = bFx, NMx = NMx, sMx = sMx, bMx = bMx, n = 20)
+
+## long data
+dta.swe.l <- my.proj %>%
+  pivot_longer(-c(x, AgeGroup, sex), 
+               names_to = "period",
+               values_to = "population") %>%
+  mutate(period = as.numeric(period),
+         Year = 1993 + (period - 1)*5,
+         YearF = as.factor(Year))
+
+CCM <- dta.swe.l |> filter(Year==2003)
+
+# Hamilton-Perry method
+load(here("courses", "population_projections", "assignment", "EDSD.lecture2.Rdata"))
+
+hp <- dta.swe |> select(Age, AgeGroup, NFx, NMx, NFx5, NMx5) |> 
+  mutate(tot = NFx + NMx,
+         tot5 = NFx5 +NMx5)
+
+hp <- as_tibble(hp) |> 
+  mutate(CCRx = tot5 / lag(tot), 
+         tot10 = CCRx * lag(tot5)) 
+
+# for the last age group
+hp <- hp |> mutate(CCRx = case_when(
+  Age == 85 ~ tot5 / (tot + lag(tot)),
+  .default = CCRx))
+
+hp <- hp |> mutate(tot10 = case_when(
+  Age == 85 ~ CCRx * (tot5 + lag(tot5)),
+  .default = tot10))
+
+# for the first age group
+total5F_15_45 <- sum(hp$NFx5[hp$Age >= 15 & hp$Age < 45], na.rm = TRUE)
+
+#we need to calculate N of woman in childbearing age for time 10 
+hp <- hp %>%
+  mutate(CCRxF = NFx5 / lag(NFx), 
+         NFx10 = CCRxF * lag(NFx5)) 
+total10F_15_45 <- sum(hp$NFx10[hp$Age >= 15 & hp$Age < 45], na.rm = TRUE)
+
+hp <- hp |> mutate(tot10 = case_when(
+  Age == 0 ~ ((NFx5 + NMx5) / total10F_15_45) * total10F_15_45,
+  .default = tot10))
+
+CCM <- CCM |> pivot_wider(names_from = sex,
+                          values_from = population) 
+CCM <- CCM|> 
+  mutate(tot_2003_CCM = Females + Males) |> 
+  select(x, AgeGroup,tot_2003_CCM)
+CCM <- CCM |> 
+  rename("Age" = x)
+hp <- hp |> select(Age, tot10)
+
+CCM <- CCM |> left_join(hp,
+                        by = join_by(Age)) |> 
+  rename("tot_2003_HP" = tot10)
+CCM <- CCM |> pivot_longer(cols = tot_2003_CCM:tot_2003_HP,
+                           names_to = "method",
+                           values_to = "Pop")
+
+# plotting
+ggplot(CCM,
+       aes(x = AgeGroup,
+           y = Pop / 1000,
+           fill = factor(method))) +
+  geom_col(position = "dodge") +
+  scale_fill_brewer(
+    palette = "Set1",
+    labels = c("tot_2003_CCM" = "CCM", "tot_2003_HP" = "HP")) +
+  labs(x = NULL, y = "Population (per 1,000)", fill = "Method",
+       title = "Projected population size by age groups for 2003") +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(face = "bold"),
+        legend.position = "top") + 
+  coord_flip()
+```
+
+The projections from the two methods mostly align, except for the first age group. The cohort-change ratios (CCR) used in the Hamilton-Perry (HP) method are similar to the survivorship ratios applied in the cohort-component method (CCM). Therefore, it is not surprising that we obtain roughly the same results for most age groups.
+
+The main difference is observed in the first age group. The CCM method uses age-specific fertility rates, which take into account both the age distribution of women in childbearing years and the fertility rates across those age groups. In contrast, the HP method uses the child-woman ratio (CWR), which does not account for these factors, as it is calculated as follows:
+
+$$
+CWR = \frac{N_0^F(t)}{_{30}N^{F}_{15}(t)}
+$$
+
+# Exercise 5
+
+**Take again the population that you used for Exercise #2. Project the population for 5 years ahead, but this time use matrix formulas. Compare your results with the projections that you obtained in Exercise #2. Are they the same? Then, project your chosen population by sex for n = 20 periods ahead and show your results.**
+
+Since we used the Leslie matrix approach in Exercise 2, in this exercise we continue the population projection for 20 intervals (i.e., 100 years into the future).
+
+To project the population from 2015 to 2115, we use the same R function developed in Exercise 2 (thanks to Marilia, who structured the function). The R implementation is shown below.
+
+```{r, echo = TRUE, results = "hide"}
+
+## Projecting population from 2015 to 2115
+
+# looping it
+PopProj20 = NULL
+countries = df_2015$Location |> unique()
+for(i in seq_along(countries)){
+  cnt = countries[i] # selecting the country name for this time
+  proj <- PopProj_Leslei(
+    x=df_2015$agecat[df_2015$Location == cnt],
+    AgeGroup=df_2015$age[df_2015$Location == cnt],
+    NFx=df_2015$popF[df_2015$Location == cnt],
+    sFx=df_2015$SxF[df_2015$Location == cnt],
+    bFx=df_2015$bxF[df_2015$Location == cnt],
+    NMx=df_2015$popM[df_2015$Location == cnt],
+    sMx=df_2015$SxM[df_2015$Location == cnt],
+    bMx=df_2015$bxM[df_2015$Location == cnt],
+    n=20 # n = 20
+  )
+  
+  if(i == 1){
+    PopProj20 <- cbind(
+      country = rep(cnt, nrow(proj)),
+      proj
+    )
+  } else{
+    PopProj20 <- rbind(
+      PopProj20,
+      cbind(
+      country = rep(cnt, nrow(proj)),
+      proj
+    )
+  )
+  }
+}
+
+# renaming columns
+
+colnames(PopProj20) <- c(colnames(PopProj20)[1:4], seq(2015, 2115, 5))
+
+# working with dataset in a long format
+
+PopProj20 <- PopProj20 |> 
+  pivot_longer(`2015`:`2115`, names_to = "year", values_to = "N")
+
+```
+
+Using the projected population from 2015 (baseline) to 2115, we compare the baseline with the final projected interval for each country and sex.
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+PopProj20 |> 
+  filter(year %in% c(2015, 2115)) |> 
+  ggplot() +
+  aes(x = x, y = ifelse(sex == "Males", -N, N), 
+      color = as.factor(year), 
+      group = interaction(sex, year)) +
+  geom_step(linewidth = 1.3) +
+  labs(
+    color = NULL,
+    y = "Population (per 1,000)",
+    x = "Age",
+    caption = "Source: United Nations, DESA. World Population Prospects, Revision 2024.",
+    title = "Baseline (2015) and projected population (2115) \n for Caucasus countries by sex") +
+  scale_color_brewer(palette = "Set1") +
+  coord_flip() +
+  facet_grid(~country, scales = "free_x") +
+  theme_minimal(base_size = 12) + 
+  geom_label(
+    data = ~ .x |> filter(country == "Armenia") |> 
+      distinct(country, .keep_all = TRUE),
+    aes(y = max(N) / 1.25, x = 80, label = 'Females'),
+    color = "black",
+    size = 4,
+    show.legend = FALSE) +
+  geom_label(
+    data = ~ .x |> filter(country == "Armenia") |> 
+      distinct(country, .keep_all = TRUE),
+    aes(y = -max(N) / 1.25, x = 80, label = 'Males'),
+    color = "black",
+    size = 4,
+    show.legend = FALSE) +
+  theme(legend.position = "top")
+
+```
+
+Since fertility and mortality rates were kept constant throughout the entire projection period, the population projected 100 years after the baseline can be interpreted as a stable population closed to migration.
+
+We observe that the echoes present in the baseline population disappear in the final projected interval for all countries. This results from the ergodic property associated with the stable population model.
+
+For all countries, we also observe an older age structure, which reflects the fertility and mortality schedules applied throughout the projection period.
