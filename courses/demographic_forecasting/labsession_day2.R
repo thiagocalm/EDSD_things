@@ -19,6 +19,7 @@ p_load(tidyverse, forecast, tseries)
 # Importing data ----------------------------------------------------------
 
 load("data/TimeSeries.Rdata")
+load("data/FertSWE.Rdata")
 
 # describing data ---------------------------------------------------------
 
@@ -94,3 +95,94 @@ plot(df$Date,df$SP500,ylim = range(df$SP500,f.RWD$mean))
 points(df$Date,pch=16)
 lines(tF,f.RW$mean,col = 2, lwd = 2)
 lines(tF,f.RWD$mean,col = 4, lwd = 2)
+
+# Autoarima comparing fertility rates -------------------------------------
+
+# Filtering data
+fert_20 <- FERT.SWE |>
+  filter(
+    Year >= 1950,
+    Age == 20
+  )
+
+## GLM
+
+# dimensions of the problem
+t <- fert_20$Year
+y <- fert_20$Births
+e <- fert_20$Exposures
+tF <- min(t):2050 # creating the rage of years
+
+mod_GLM <- glm(round(y) ~ Year, data = fert_20, offset = log(e), family = poisson())
+
+# forecasting with glm
+fF.GLM <- exp(coef(mod_GLM)[1] + coef(mod_GLM)[2] * tF)
+
+## ARIMA
+
+# dimensions of the problem
+t <- fert_20$Year
+y <- fert_20$logRates
+tF <- min(t):2050 # creating the rage of years
+
+# plotting it...
+
+ggplot() +
+  aes(x = t, y = y) +
+  geom_point()
+
+# ACF
+Acf(y)
+# PACF
+Acf(y,type = "partial")
+
+# taking the first-order diff...
+y.diff <- diff(y)
+
+# ACF
+Acf(y.diff)
+# PACF
+Acf(y.diff,type = "partial")
+
+# tests
+tseries::kpss.test(y)
+tseries::kpss.test(y.diff)
+
+
+## modeling it...
+
+# RWD
+
+mod2_RWD <- Arima(
+  y = y,
+  order = c(0,1,0),
+  include.drift = TRUE
+)
+
+summary(mod2_RWD)
+
+# AR
+
+mod2_ar <- auto.arima(y)
+summary(mod2_ar)
+
+## comparing forecasts
+t_ends = 2050
+tF = t_ends - max(t)
+
+fF.RWD <- forecast(mod2_RWD, h = tF)
+plot(fF.RWD)
+
+fF.AR <- forecast(mod2_ar, h = tF)
+plot(fF.AR)
+
+# putting everything together...
+
+#
+#
+# tibble(
+#   time = min(t):2050,
+#   GLM = fF.GLM,
+#   RWD = exp(fF.RWD$mean),
+#   AR = exp(fF.AR$mean),
+# )
