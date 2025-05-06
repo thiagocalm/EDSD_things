@@ -176,13 +176,46 @@ plot(fF.RWD)
 fF.AR <- forecast(mod2_ar, h = tF)
 plot(fF.AR)
 
-# putting everything together...
+## Simulating fitted values using bootstrap
 
-#
-#
-# tibble(
-#   time = min(t):2050,
-#   GLM = fF.GLM,
-#   RWD = exp(fF.RWD$mean),
-#   AR = exp(fF.AR$mean),
-# )
+# number of simulations
+nS <- 100    ## increase for improved precision
+set.seed(1)  ## for reproducibility
+tF <- (max(fert_20$Year)+1):2050 # creating the rage of years
+# object to store simulations
+s <- 1
+h = length(tF)
+LFsim <- matrix(NA,h,nS)
+for (s in 1:nS){
+  lf.fore.sim <- simulate(
+    mod2_ar,
+    nsim=h,
+    future=TRUE,
+    bootstrap=TRUE
+  )
+  ## saving
+  LFsim[,s] <- lf.fore.sim
+}
+
+## plotting all simulations
+plot(t,y,ylim=range(y,LFsim),xlim=range(t,tF))
+matlines(tF,LFsim,col="grey80",lty=1)
+
+## deriving median and 95% PI
+lev <- 95
+lev.p <- lev/100
+lf.fore.med <- apply(LFsim,1,median) # taking the median based on the rows of a matrix
+lf.fore.low <- apply(LFsim,1,quantile,prob=(1-lev.p)/2) # taking the lower CI based on the rows of a matrix
+lf.fore.up <- apply(LFsim,1,quantile,prob=1-(1-lev.p)/2) # taking the upper CI based on the rows of a matrix
+
+## comparing PIs
+plot(t,y,ylim=range(y,fF.AR$lower,lf.fore.low),xlim=range(t,tF))
+## analytical
+lines(tF,fF.AR$mean,col=3,lwd=2)
+lines(tF,fF.AR$upper[,2],col=3,lwd=2,lty=2)
+lines(tF,fF.AR$lower[,2],col=3,lwd=2,lty=2)
+## simulations
+lines(tF,lf.fore.med,col=4,lwd=2)
+lines(tF,lf.fore.up,col=4,lwd=2,lty=2)
+lines(tF,lf.fore.low,col=4,lwd=2,lty=2)
+legend("bottomleft",c("analytical","simulations"),col=c(3,4),lwd=2)
