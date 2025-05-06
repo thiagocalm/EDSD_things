@@ -96,7 +96,7 @@ PopProjLeslei <- function(Nbase_Fem,Nbase_Male = NULL, Sx_Fem,Sx_Male = NULL, bF
     Proj_pop[t] <- L %*% Proj_pop[t-1]
   }
 
-  out <- cbind(data.frame(x = age_groups, sex = rep("Female",dim) Proj_pop))
+  out <- cbind(data.frame(x = age_groups, sex = rep("Female",dim), Proj_pop))
   return(out)
 
 }
