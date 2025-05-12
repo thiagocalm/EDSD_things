@@ -154,7 +154,7 @@ df |>
   geom_point(size = 5, alpha = .4) +
   labs(
     y = "Euro per capita, real (HICP, 2015 = 100)",
-    title = "Gross disposable income per capita",
+    title = "Adjusted net disposable income per capita",
     color = "",
     caption = "Source: Eurostat, ESA 2010, annual sector accounts, household sector. UNDESA, World Population Prospects, Revision 2024."
   ) +
@@ -166,4 +166,3 @@ df |>
     axis.title.x = element_blank(),
     plot.title = element_text(face = "bold", hjust = .5, vjust = .5)
   )
-
