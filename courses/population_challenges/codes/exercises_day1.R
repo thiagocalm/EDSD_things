@@ -144,3 +144,26 @@ df <- df |>
     dipc = (income_gross / hicp) / pop
   )
 
+
+# Graphic -----------------------------------------------------------------
+
+df |>
+  ggplot() +
+  aes(x = year, y = dipc, color = country, group = interaction(country, country)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 5, alpha = .4) +
+  labs(
+    y = "Euro per capita, real (HICP, 2015 = 100)",
+    title = "Gross disposable income per capita",
+    color = "",
+    caption = "Source: Eurostat, ESA 2010, annual sector accounts, household sector. UNDESA, World Population Prospects, Revision 2024."
+  ) +
+  scale_x_continuous(breaks = seq(2008,2023),1) +
+  scale_y_continuous(breaks = seq(round(min(df$dipc)*.95,0),round(max(df$dipc)*1.05,0),1000)) +
+  scale_color_viridis_d(option = "H") +
+  theme_minimal(base_size = 18) +
+  theme(
+    axis.title.x = element_blank(),
+    plot.title = element_text(face = "bold", hjust = .5, vjust = .5)
+  )
+
