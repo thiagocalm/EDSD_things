@@ -147,14 +147,16 @@ df <- df |>
 
 # Graphic -----------------------------------------------------------------
 
-df |>
+# net disposable income
+
+ndipc <- df |>
   ggplot() +
   aes(x = year, y = dipc, color = country, group = interaction(country, country)) +
   geom_line(linewidth = 1.2) +
   geom_point(size = 5, alpha = .4) +
   labs(
     y = "Euro per capita, real (HICP, 2015 = 100)",
-    title = "Adjusted net disposable income per capita",
+    title = "Inflation adjusted net disposable income per capita",
     color = "",
     caption = "Source: Eurostat, ESA 2010, annual sector accounts, household sector. UNDESA, World Population Prospects, Revision 2024."
   ) +
@@ -166,3 +168,41 @@ df |>
     axis.title.x = element_blank(),
     plot.title = element_text(face = "bold", hjust = .5, vjust = .5)
   )
+
+ggsave(
+  ndipc,
+  filename = file.path("courses","population_challenges","output","net_disposable_income_pc.pdf"),
+  device = "pdf",
+  width = 10,
+  height = 6.5
+)
+
+# basket
+
+basket <- df |>
+  ggplot() +
+  aes(x = year, y = hicp*100, color = country, group = interaction(country, country)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 5, alpha = .4) +
+  labs(
+    y = "HICP (2015 = 100)",
+    title = "Harmonized Index of Consumer Prices (HICP)",
+    color = "",
+    caption = "Source: Eurostat, ESA 2010."
+  ) +
+  scale_x_continuous(breaks = seq(2008,2023),1) +
+  # scale_y_continuous(breaks = seq(round(min(df$dipc)*.95,0),round(max(df$dipc)*1.05,0),1000)) +
+  scale_color_viridis_d(option = "H") +
+  theme_minimal(base_size = 18) +
+  theme(
+    axis.title.x = element_blank(),
+    plot.title = element_text(face = "bold", hjust = .5, vjust = .5)
+  )
+
+ggsave(
+  basket,
+  filename = file.path("courses","population_challenges","output","basket.pdf"),
+  device = "pdf",
+  width = 10,
+  height = 6.5
+)
