@@ -387,7 +387,7 @@ kin_summary |>
   labs(
     y = "KDR = Vertical relatives / Horizontal relatives",
     x = "Focal's age",
-    title = "Kinship Dependency Ratios (KDR) over life cicle of a focal by focal's sex",
+    title = "Kinship Dependency Ratios (KDR) over focal's life cicle\nby focal's sex - Overall",
     color = "",
     caption = "Source: UNDESA, World Population Prospects, Revision 2024."
   ) +
@@ -398,6 +398,13 @@ kin_summary |>
   theme(
     plot.title = element_text(face = "bold", hjust = .5, vjust = .5)
   )
+
+ggsave(
+  filename = file.path("courses","population_challenges","output","exercise2_kdr_overall.pdf"),
+  device = "pdf",
+  width = 10,
+  height = 6.5
+)
 
 # graphing by sex and age - Descending
 
@@ -455,7 +462,7 @@ kin_summary |>
   labs(
     y = "KDR = Vertical relatives / Horizontal relatives",
     x = "Focal's age",
-    title = "Kinship Dependency Ratios (KDR) over life cicle of a focal by focal's sex - Descending",
+    title = "Kinship Dependency Ratios (KDR) over focal's life cicle\nby focal's sex - Descending",
     color = "",
     caption = "Source: UNDESA, World Population Prospects, Revision 2024."
   ) +
@@ -466,6 +473,13 @@ kin_summary |>
   theme(
     plot.title = element_text(face = "bold", hjust = .5, vjust = .5)
   )
+
+ggsave(
+  filename = file.path("courses","population_challenges","output","exercise2_kdr_descending.pdf"),
+  device = "pdf",
+  width = 10,
+  height = 6.5
+)
 
 # graphing by sex and age - Ascending
 
@@ -523,7 +537,7 @@ kin_summary |>
   labs(
     y = "KDR = Vertical relatives / Horizontal relatives",
     x = "Focal's age",
-    title = "Kinship Dependency Ratios (KDR) over life cicle of a focal by focal's sex - Ascending",
+    title = "Kinship Dependency Ratios (KDR) over focal's life cicle\nby focal's sex - Ascending",
     color = "",
     caption = "Source: UNDESA, World Population Prospects, Revision 2024."
   ) +
@@ -534,3 +548,10 @@ kin_summary |>
   theme(
     plot.title = element_text(face = "bold", hjust = .5, vjust = .5)
   )
+
+ggsave(
+  filename = file.path("courses","population_challenges","output","exercise2_kdr_ascending.pdf"),
+  device = "pdf",
+  width = 10,
+  height = 6.5
+)
