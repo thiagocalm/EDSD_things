@@ -189,4 +189,85 @@ dist.om1 <- seqdist(
   sm = submat # sequences matrix - it has to be align with RQ. Is worth to have penalities based on rare changes?
 )
 
-dist.om1[1:10, 1:10] |> View()
+dist.om1[1:10, 1:10]
+
+
+# Description analysis to BioFam data -------------------------------------
+
+# STEP 1 - DEFINING STATE LABELS AND CONDES
+
+biofam.labels <- c(
+  "Parent", "Left", "Married", "Left+Married", "Child",
+  "Left+Child","Left+Marr+Child","Divorced"
+)
+biofam.scode <- c("P","L","M","LM","C","LC","LMC","D")
+
+# Create sequence object
+biofam.seq <- seqdef(
+  biofam,
+  10:25,
+  states = biofam.scode,
+  labels = biofam.labels
+)
+# extracting alphabet from the sequence object
+alphabet(biofam.seq)
+# stlab are the labels
+stlab(biofam.seq)
+
+# View and change sequence representation
+biofam.seq[1:3, ]
+print(biofam.seq[1:3, ], format = "SPS") # compact way to represent the sequences
+seqdss(biofam.seq[1:3, ]) # same transitions without the duration
+
+# Sequence plots
+seqdplot(biofam.seq) # distribution plot
+seqfplot(biofam.seq) # grouping the distributions and showing the first 10 common sequences
+
+# Arrange plots with legend
+par(mfrow = c(2, 2))
+seqiplot(biofam.seq, with.legend = FALSE, border = NA, space = 0, main = "index plot (first ten sequences)")
+seqfplot(biofam.seq, with.legend = FALSE, border = NA, space = 0, pbarw = TRUE, main = "Sequence frequency plot")
+seqdplot(biofam.seq, with.legend = FALSE, border = NA, space = 0, main = "State distribution plot")
+seqlegend(biofam.seq, cex = 0.75)
+par(mfrow = c(1, 1))
+
+# to have completed index plot
+seqIplot(biofam.seq, with.legend = FALSE, border = NA, space = 0, main = "index plot (all the sequences)")
+
+# Colors and palettes
+display.brewer.all() # show colors
+cpal(biofam.seq) <- brewer.pal(8, "Greys") # changing the palettes
+seqdplot(biofam.seq)
+cpal(biofam.seq) <- brewer.pal(8, "Accent") # standard one
+
+# Grouped plots
+levels(biofam$sex) # seeing level of sex variable
+seqdplot(biofam.seq, group = biofam$sex, border = NA, space = 0)
+seqmtplot(biofam.seq, group = biofam$sex) # average time spent in each trajectories
+seqmsplot(biofam.seq, group = biofam$sex) # modal state in each time
+seqIplot(biofam.seq, group = biofam$sex)
+
+# Statistics
+seqtab(biofam.seq)
+seqstatd(biofam.seq[, 1:8])
+seqtransn(biofam.seq[1:10, ]) # number of transitions
+biofam.trate <- seqtrate(biofam.seq) # transition rates
+biofam.trate
+seqtrate(biofam.seq[,1:2]) # transition rates from first period to second
+round(biofam.seq, 2)
+
+# Frequent subsequences
+biofam.seqe <- seqecreate(biofam.seq)
+fsubseq <- seqefsub(biofam.seqe, pmin.support = 0.05)
+plot(fsubseq[1:15], col = "green")
+
+# Optimal Matching with transition rates
+submat <- seqsubm(biofam.seq, method = "TRATE") # creating inverse transition rates
+dist.om1 <- seqdist(
+  biofam.seq,
+  method = "OM",
+  indel = "auto", # it is the weigth we attribute to insertion/deletion operations. It has to be align with research question
+  sm = submat # sequences matrix - it has to be align with RQ. Is worth to have penalities based on rare changes?
+)
+
+dist.om1[1:10, 1:10]
