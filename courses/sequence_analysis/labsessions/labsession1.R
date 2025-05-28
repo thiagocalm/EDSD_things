@@ -2,7 +2,7 @@
 #'@date 2025-05-27
 #'@program EDSD
 #'@course Sequence Analysis
-#'@professor Tommy, Bernhard and Carole
+#'@professor Nicola Barban
 #'@description Lab session 1
 #'---------------------------------------
 
