@@ -232,6 +232,8 @@ write_dta(mvad, "mvad_cluster.dta")
 
 ################################################
 ##### Multichannel sequence analysis
+
+# importing biofam dataset
 data(biofam)
 
 ## Building one channel per type of event left, children or married
@@ -240,20 +242,22 @@ children <-  bf==4 | bf==5 | bf==6
 married <- bf == 2 | bf== 3 | bf==6
 left <- bf==1 | bf==3 | bf==5 | bf==6
 
-## Building sequence objects
+## Building sequence objects for each domain - they only have two states
 child.seq <- seqdef(children)
 marr.seq <- seqdef(married)
 left.seq <- seqdef(left)
 
 ## Using transition rates to compute substitution costs on each channel
 
-mcdist <- seqdistmc(channels=list(child.seq,
-                                  marr.seq,
-                                  left.seq),
-                    method="OM",
-                    sm =list("TRATE",
-                             "TRATE",
-                             "TRATE"))
+mcdist <- seqdistmc(
+  channels=list(child.seq,
+                marr.seq,
+                left.seq),
+  method="OM",
+  sm =list("TRATE",
+           "TRATE",
+           "TRATE")
+)
 
 mcdist[1:5,1:5]
 
@@ -263,26 +267,36 @@ smatrix[[1]] <- seqsubm(child.seq, method="CONSTANT")
 smatrix[[2]] <- seqsubm(marr.seq, method="CONSTANT")
 smatrix[[3]] <- seqsubm(left.seq, method="TRATE")
 
-mcdist2 <- seqdistmc(channels=list(child.seq, marr.seq, left.seq),
-                     method="OM", sm =smatrix, cweight=c(2,1,1))
+mcdist2 <- seqdistmc(
+  channels=list(child.seq, marr.seq, left.seq),
+  method="OM",
+  sm =smatrix,
+  cweight=c(2,1,1) # attributing different weigth for each domain
+)
 
-
-biofam.clusterward = agnes(mcdist,
-                           diss = T,
-                           method = "ward")
-
-
+# calculating euclidian distances to establish clusters
+biofam.clusterward = agnes(
+  mcdist,
+  diss = T,
+  method = "ward"
+)
+# dendogram
 plot(biofam.clusterward, ask = F, which.plots = 2)
 biofam.cl4 <- cutree(biofam.clusterward, k = 4)
 
 ########
+par(mfrow = c(1,3))
 seqdplot(child.seq, group=biofam.cl4)
 seqdplot(marr.seq, group=biofam.cl4)
 seqdplot(left.seq, group=biofam.cl4)
-
+par(mfrow = c(1,1))
 
 ######### Extra: cluster quality
-#install.packages("WeightedCluster")
+# Let's assessing the cluster's quality using some measures for that.
+# it is based on a paper of Mathias Studer (2013, i guess...)
+# Reference of these statistics: book suggested by Nicola
+# the most interesting is R^2
+
 library(WeightedCluster)
 
 ####### Statistics for cluster solution
@@ -304,16 +318,17 @@ par(mfrow=c(1,2))
 plot(1:19,R2 , type="l")
 plot(1:19,ASW , type="l")
 
-
-
+# it compares some measures for each number of clusters we could choose
 avgClustQual <- as.clustrange(mvad.clusterward, diss=dist.om1, ncluster=10)
 
+summary(avgClustQual, max.rank = 2) # summaries of each cluster
 par(mfrow=c(1,1))
-plot(avgClustQual)
-summary(avgClustQual, max.rank = 2)
+plot(avgClustQual) # plotting indicators
+# we can calculate the first derivative to get the better point related to this measures!!!
 
 
 ### Plotting the hierarchical cluster tree
+# based on the partition tree
 
 averageClust <- hclust(as.dist(dist.om1), method = "average")
 averageTree <- as.seqtree(averageClust, seqdata = mvad.seq, diss = dist.om1,
