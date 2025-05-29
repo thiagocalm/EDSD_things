@@ -160,3 +160,79 @@ ggplot() +
 
 ```
 
+[write the interpretation here...]
+
+# Exercise 2
+
+For this exercise, we will use not only the age 0, but all the range age between 0 and 100.
+
+```{r}
+mort <- MORT.SWE |> 
+  filter(
+    Year >= 1950,
+    Sex == "Male",
+    between(Age, 0, 100)
+  )
+```
+
+Let's fit a GLM model for deaths, using an offset, for all age groups available.
+
+```{r}
+
+### MODEL - GLM for deaths with exposure
+
+# dimensions of the problem
+t <- unique(mort$Year)
+tF <- min(t):2050 # creating the rage of years
+age <- unique(mort$Age)
+n <- length(age)
+m <- length(tF)
+
+# creating object for forecasting
+mF <- matrix(data = NA, nrow = n, ncol = m)
+
+# loop for predicted and forecasting mortality rates
+i = 1
+for(i in seq_along(age)){
+  # setting remain dimensions of the problem
+  y <- mort$Deaths[mort$Age == age[i]]
+  e <- mort$Exposures[mort$Age == age[i]]
+  # fit the model
+  mod.glm <- glm(y ~ t, offset = log(e), family = poisson())
+  #predict model
+  mF[i,] <- exp(coef(mod.glm)[1] + coef(mod.glm)[2] * tF)
+}
+
+```
+
+To compare the predicted values and the observed ones, we can see the panel of plots below.
+
+```{r}
+
+# Plot 1 - observed rates
+
+plot1 <- mort |> 
+  ggplot() +
+  # aes(x = Year, y = logRates, color = Age, group = interaction(Age, Age)) +
+  aes(x = Age, y = logRates, color = Year, group = interaction(Year, Year)) +
+  geom_line(alpha = .3) +
+  scale_color_viridis_c(option = "B") +
+  labs(title = "Observed rates") +
+  theme_light(base_size = 12)
+
+# Plot 2 - predicted rates
+
+colnames(mF) <- 1950:2050
+
+plot1 <- mF |>
+  as_tibble()
+  ggplot() +
+  aes(x = Age, y = logRates, color = Year, group = interaction(Year, Year)) +
+  geom_line(alpha = .3) +
+  scale_color_viridis_c(option = "B") +
+  labs(title = "Observed rates") +
+  theme_light(base_size = 12)
+
+```
+
+
