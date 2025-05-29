@@ -35,7 +35,7 @@ invisible(gc()) # clealing the storage memory of the computer
 
 # packages
 library(pacman)
-p_load(tidyverse, wpp2024, here, knitr, kableExtra, patchwork)
+p_load(tidyverse, wpp2024, here, knitr, kableExtra, patchwork, forecast, tseries)
 
 ```
 
@@ -280,4 +280,132 @@ plot1 + plot2 + plot3
 
 ```
 
+[write the interpretation here...]
 
+# Exercise 3
+
+We will work with the same data set, but with male mortality rates from 1950 to 2000 for age 20.
+
+```{r}
+mort_m20 <- MORT.SWE |> 
+  filter(
+    Year >= 1950,
+    Sex == "Male",
+    Age == 20
+  )
+```
+
+Let's fit and forecast mortality up to 2022 using two different models
+
+  - a random walk with drift model for log-rates
+  
+  - the best possible ARIMA model for log-rates
+  
+```{r}
+
+### MODEL 1 - Random walk with drift
+
+# dimensions of the problem
+t <- mort_m20$Year[mort_m20$Year <= 2000]
+y <- mort_m20$logRates[mort_m20$Year <= 2000]
+tF <- min(t):2022 # creating the rage of years
+
+# plotting it...
+
+ggplot() +
+  aes(x = t, y = y) +
+  geom_point()
+
+# ACF
+Acf(y)
+# PACF
+Acf(y,type = "partial")
+
+# taking the first-order diff...
+y.diff <- diff(y)
+
+# ACF
+Acf(y.diff)
+# PACF
+Acf(y.diff,type = "partial")
+
+# tests
+tseries::kpss.test(y)
+tseries::kpss.test(y.diff)
+
+
+## modeling it...
+
+# RWD
+
+mod.RWD <- Arima(
+  y = y,
+  order = c(0,1,0),
+  include.drift = TRUE
+)
+
+summary(mod.RWD)
+
+# AR
+
+mod.ar <- auto.arima(y)
+summary(mod.ar)
+
+## comparing forecasts
+t_ends = 2022
+tF = t_ends - max(t)
+
+mF.RWD <- forecast(mod.RWD, h = tF) |> 
+  as_tibble() |> 
+  mutate(year = seq(max(t)+1,t_ends,1))
+
+mF.AR <- forecast(mod.ar, h = tF) |> 
+  as_tibble() |> 
+  mutate(year = seq(max(t)+1,t_ends,1))
+
+```
+
+Now, let's plot our observed and fitted (predicted and forecasted values).
+
+```{r}
+
+# creating a dataframe with all the estimates together
+
+mF <- mF.RWD |> 
+  mutate(type = "RWD") |> 
+  bind_rows(
+    mF.AR |> 
+  mutate(type = "AR")
+  )
+
+ggplot() +
+  geom_line(
+    data = mort_m20,
+    aes(x = Year, y = logRates),
+    linewidth = 1.2,
+    color = "black"
+  ) +
+  geom_line(
+    data = mF,
+    aes(x = year, y = `Point Forecast`, color = type),
+    linewidth = 1.2
+  ) +
+  geom_line(
+    data = mF,
+    aes(x = year, y = `Lo 95`, color = type),
+    linetype = "dashed",
+    linewidth = 1.2
+  ) +
+  geom_line(
+    data = mF,
+    aes(x = year, y = `Hi 95`, color = type),
+    linetype = "dashed",
+    linewidth = 1.2
+  ) +
+  theme_light(base_size = 12)
+  
+
+
+```
+
+[write the interpretation here...]
