@@ -35,7 +35,7 @@ invisible(gc()) # clealing the storage memory of the computer
 
 # packages
 library(pacman)
-p_load(tidyverse, wpp2024, here, knitr, kableExtra, patchwork, forecast, tseries)
+p_load(tidyverse, wpp2024, here, knitr, kableExtra, patchwork, forecast, tseries, modelsummary)
 
 ```
 
@@ -300,7 +300,9 @@ Let's fit and forecast mortality up to 2022 using two different models
   - a random walk with drift model for log-rates
   
   - the best possible ARIMA model for log-rates
-  
+
+The first exercise is to describe the data, trying to interpret which kind of model will fit better in this case. To do so, we can use ACF plot and test for stationarity (KPSS).
+
 ```{r}
 
 ### MODEL 1 - Random walk with drift
@@ -312,15 +314,20 @@ tF <- min(t):2022 # creating the rage of years
 
 # plotting it...
 
-ggplot() +
-  aes(x = t, y = y) +
-  geom_point()
-
+par(mfrow = c(1,3))
+# description of the data
+plot(t,y)
 # ACF
 Acf(y)
 # PACF
 Acf(y,type = "partial")
+par(mfrow = c(1,1))
 
+```
+
+It seems that we are dealing with a non-stationary series. To understand better if we can make the serie become startionary, let's take the first difference of the rates and plot the same graphs again.
+
+```{r}
 # taking the first-order diff...
 y.diff <- diff(y)
 
@@ -329,11 +336,32 @@ Acf(y.diff)
 # PACF
 Acf(y.diff,type = "partial")
 
+# plotting it...
+
+par(mfrow = c(1,3))
+# description of the data
+plot(t[-1],y.diff)
+Acf(y.diff)
+# PACF
+Acf(y.diff,type = "partial")
+par(mfrow = c(1,1))
+
+```
+
+Based on the first difference, we observe that the rates are more stationary over time. Also, based on the Partial ACF, we can see that it seems that there are a order three of dependency of previous values, which would be associated with a MA(3) model.
+
+To be sure about the stationarity of the model considering the first difference, let's calculate the KPSS test for stationarity and seasonality.
+
+```{r}
 # tests
 tseries::kpss.test(y)
 tseries::kpss.test(y.diff)
 
+```
 
+So, we conclude that the first order difference would be a better option to guarantee the stationarity of this serie.
+
+```{r}
 ## modeling it...
 
 # RWD
@@ -344,12 +372,15 @@ mod.RWD <- Arima(
   include.drift = TRUE
 )
 
-summary(mod.RWD)
-
 # AR
 
 mod.ar <- auto.arima(y)
+
+summary(mod.RWD)
 summary(mod.ar)
+
+# comparing models
+modelsummary(list(mod.RWD,mod.ar),output = "markdown")
 
 ## comparing forecasts
 t_ends = 2022
@@ -365,6 +396,8 @@ mF.AR <- forecast(mod.ar, h = tF) |>
 
 ```
 
+After modelling and comparing these models, we can see that adding three lagged observations to model the next one -- ARIMA (0,1,3) -- not make the model more parsimonious than modeling it as a Random Walk with Drift (RWD) considering the first difference.
+
 Now, let's plot our observed and fitted (predicted and forecasted values).
 
 ```{r}
@@ -378,6 +411,7 @@ mF <- mF.RWD |>
   mutate(type = "AR")
   )
 
+
 ggplot() +
   geom_line(
     data = mort_m20,
@@ -390,21 +424,16 @@ ggplot() +
     aes(x = year, y = `Point Forecast`, color = type),
     linewidth = 1.2
   ) +
-  geom_line(
+  geom_ribbon(
     data = mF,
-    aes(x = year, y = `Lo 95`, color = type),
-    linetype = "dashed",
-    linewidth = 1.2
-  ) +
-  geom_line(
-    data = mF,
-    aes(x = year, y = `Hi 95`, color = type),
-    linetype = "dashed",
-    linewidth = 1.2
+    aes(
+      x = year,
+      ymin = `Lo 95`, ymax = `Hi 95`,
+      fill = type
+    ), 
+    alpha = 0.2
   ) +
   theme_light(base_size = 12)
-  
-
 
 ```
 
