@@ -1,0 +1,162 @@
+---
+title: "EDSD 2024–2025: Population Projection's Assignment"
+author:
+  - "Sanan Abdulayev"
+  - "Gilbert Habaasa"
+  - "Thiago C. Almeida"
+date:
+format:
+  pdf:
+      }
+      \pagestyle{fancy}
+      \fancyhead[R]{\includegraphics[width=2cm]{edsd_logo.png}}
+      \fancyfoot[C]{}
+    keep-tex: true
+    header-includes: |
+      \usepackage{fancyhdr}
+      \usepackage{graphicx}
+      \usepackage{fvextra}
+      % redefine Highlighting para wrap de código
+      \DefineVerbatimEnvironment{Highlighting}{Verbatim}{
+        commandchars=\\\{\},
+        breaklines=true,
+        breakanywhere=true,
+        fontsize=\small
+      \fancyhead[L]{Instructor: Marília Nepomuceno}
+editor: visual
+editor_options:
+  chunk_output_type: console
+---
+
+```{r packages}
+# general settings
+rm(list = ls()) # removing all itens of environment
+invisible(gc()) # clealing the storage memory of the computer
+
+# packages
+library(pacman)
+p_load(tidyverse, wpp2024, here, knitr, kableExtra)
+
+```
+
+
+# Introduction
+
+For this assignment, we will use data from Sweden, with mortality rates from 1771 to 2022 by age and sex.
+
+```{r}
+load("data/MortSWE.Rdata")
+```
+
+A general trend of these mortality rates from 1950 onwards can be seen in the graphic below.
+
+```{r}
+MORT.SWE |> 
+  filter(Year >= 1950, Age <= 100) |> 
+  ggplot() +
+  aes(x = Age, y = logRates, color = Year, group = interaction(Year, Year)) +
+  geom_line(alpha = .3) +
+  facet_wrap(.~Sex) +
+  theme_minimal(base_size = 10)
+```
+
+# Exercise 1
+
+For this exercise, we will work with male's moratlity from 1950 onwards for newborns (age 0).
+
+```{r}
+mort_m0 <- MORT.SWE |> 
+  filter(
+    Year >= 1950,
+    Sex == "Male",
+    Age == 0
+  )
+```
+
+Now, let's fit and forecast mortality from 2022 up to 2050 using two different models:
+
+ - a linear model for death rates;
+ 
+ - a generalized linear model for deaths, using exposures as an offset.
+ 
+```{r}
+
+### MODEL 1 - LM for death rates
+
+mod1 <- lm(Rates ~ Year, data = mort_m0)
+
+summary(mod1)
+
+## predicting values and extrapolating it until 2050
+
+# dimensions of the problem
+t <- mort_m0$Year
+y <- mort_m0$Rates
+
+# fit and focast of the model
+tF <- min(t):2050 # creating the rage of years
+
+df_forecast <- tibble(Year = tF) # creating df with rage of years
+
+# forecasting years
+
+yF <- predict(object = mod1, newdata = df_forecast)
+
+# adding it to df
+
+df_forecast <- df_forecast |> 
+  bind_cols(yF) |> 
+  select(Year, mx_lm = `...2`) |> 
+  mutate(
+    type = case_when(Year <= max(t) ~ "Predicted", TRUE ~ "Projected")
+  )
+
+### MODEL 2 - GLM for deaths with exposure
+
+# dimensions of the problem
+t <- mort_m0$Year
+y <- mort_m0$Deaths
+e <- mort_m0$Exposures
+tF <- min(t):2050 # creating the rage of years
+
+# fit the model
+mod1.glm <- glm(y ~ Year, data = mort_m0, offset = log(e), family = poisson())
+
+summary(mod1.glm)
+
+# forecasting years
+
+df_forecast <- df_forecast |> 
+  mutate(
+    mx_glm = exp(coef(mod1.glm)[1] + coef(mod1.glm)[2] * tF)
+  ) |> 
+  rename(
+    "LM" = mx_lm,
+    "GLM" = mx_glm
+  ) |> 
+  pivot_longer(
+    cols = c(LM, GLM),
+    values_to = "mx",
+    names_to = "model"
+  )
+
+# plotting it...
+
+ggplot() +
+  geom_line(
+    data = df_forecast,
+    aes(x = Year, y = mx, linetype = type, color = model),
+    linewidth = 1.3
+  ) +
+  geom_point(
+    data = mort_m0,
+    aes(x = Year, y = Rates),
+    color = "black",
+    size = 2
+  ) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 1) +
+  theme_minimal()
+
+
+```
+
