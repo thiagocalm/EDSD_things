@@ -40,23 +40,23 @@ set.seed(2019)
 # redefining the Lexis shape specs ====
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 redo_lexis_shape <-
-  function(pmin, pmax, amin, amax, interval = 10){
+  function(pmin, pmax, amin, amax){
     lexis_shape <<-
       list(
-        geom_vline(xintercept = seq(pmin, pmax, interval),
+        geom_vline(xintercept = seq(pmin, pmax, 10),
                    linewidth = 0.2, linetype = "dashed",
                    alpha = 0.8, color = "grey30"),
-        geom_hline(yintercept = seq(amin, amax, interval),
+        geom_hline(yintercept = seq(amin, amax, 10),
                    linewidth = 0.2, linetype = "dashed",
                    alpha = 0.8, color = "grey30"),
         # adding cohorts
-        geom_abline(intercept = seq(-pmax, -(pmin-amax), interval), slope = 1,
+        geom_abline(intercept = seq(-pmax, -(pmin-amax), 10), slope = 1,
                     linetype = "dashed", color = "grey30",
                     linewidth = .2, alpha = 0.8),
         coord_equal(expand = 0),
         # adding proper labels to both axis
-        scale_x_continuous(breaks = seq(pmin, pmax, interval)),
-        scale_y_continuous(breaks = seq(amin, amax, interval)),
+        scale_x_continuous(breaks = seq(pmin, pmax, 10)),
+        scale_y_continuous(breaks = seq(amin, amax, 10)),
         # adding axis titles
         labs(y = "Age", x = "Period"),
         theme_bw()
@@ -330,10 +330,12 @@ plot_carst <-
 obtain_excess <-
   function(cd, sx, ag, ymin){
 
+    zip_files <- unzip("courses/apc/data_input/STMFinput.zip", list = TRUE)
+
     file_name <- zip_files %>% filter(str_detect(Name, cd)) %>% pull(Name)
 
     dt <-
-      read_csv(unz("data_input/STMFinput.zip", file_name)) %>%
+      read_csv(unz("courses/apc/data_input/STMFinput.zip", file_name)) %>%
       mutate(Week = as.double(Week))
 
     # adding date to each ISO week, using the package ISOweek
@@ -395,7 +397,7 @@ obtain_excess <-
     # solution: interpolation
 
     # loading total population counts from WPP
-    pop <- read_rds("data_input/wpp2022_pop.rds")
+    pop <- read_rds("courses/apc/data_input/wpp2022_pop.rds")
 
     # selecting the Spanish population
     pop2 <-
@@ -591,3 +593,64 @@ obtain_excess <-
 
     return(out_f)
   }
+
+excess_birth_c19 <- function(cnty){
+  # selecting country
+
+  bts2 <- bts |>
+    filter(country == cnty)
+
+  # excluding covid period (> March 2020)
+  covid <- seq(ymd('2020-03-15'),ymd('2021-12-15'), by = '1 month')
+
+  bts2 <-
+    bts2 %>%
+    mutate(per = case_when(date %in% covid ~ "covid",
+                           TRUE ~ "typical"),
+           # weights with value 0 during COVID
+           w = ifelse(date %in% covid, 0, 1))
+
+  # fitting a GAM model with loglinear and cyclical terms
+  md <-
+    gam(bts ~ t + s(mth, bs = 'cp'),
+        weights = w,
+        data = bts2,
+        family = "quasipoisson")
+
+  # summary(md)
+
+  # predicting the model
+  p <- predict(md, newdata = bts2, type = "response", se.fit = TRUE)
+
+  # obtaining the baseline and confidence intervals
+  bts2 <-
+    bts2 %>%
+    mutate(bsn = p$fit,
+           ul = p$fit + (2 * p$se.fit),
+           ll = p$fit - (2 * p$se.fit))
+
+  # plotting
+  plot_excess <- bts2 %>%
+    ggplot()+
+    geom_ribbon(aes(date, ymin = ll, ymax = ul), fill = "red", alpha = 0.3)+
+    geom_point(aes(date, bts))+
+    geom_line(aes(date, bts))+
+    geom_line(aes(date, bsn), col = "red")+
+    labs(title = paste0(cnty)) +
+    theme_bw()
+
+  # impact
+
+  impact <- bts2 %>%
+    summarise(bts = sum(bts),
+              bsn = round(sum(bsn)),
+              exc = bts - bsn,
+              psc = 100*exc/bsn,
+              mts = n(),
+              .by = c(per))
+
+  print(impact)
+
+  # return it
+  return(plot_excess)
+}
