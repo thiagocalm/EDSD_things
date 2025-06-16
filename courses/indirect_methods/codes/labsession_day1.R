@@ -4,7 +4,6 @@ options(scipen = 999999)
 library(demogsurv)
 library(rdhs)
 
-
 # Working with modelling data from package --------------------------------
 
 # Importing DHS data for modelling
@@ -17,7 +16,7 @@ brfile <- zzbr[grep("caseid|^v0|^v1|^b", names(zzbr))]
 
 # define outcome and date of death
 
-brfile$death =  brfile$b5 == 0
+brfile$death =  brfile$b5 == "no"
 brfile$dod = NA
 brfile$unit = trunc(brfile$b6/100); brfile$value = brfile$b6 - brfile$unit*100
 
@@ -49,11 +48,15 @@ calc_nqx(brfile, agegr=c(0, 1, 3, 5, 12, 24, 36, 48, 60)/12, by= ~ sex)
 
 # Importing DHS data for modelling
 
-data("zzbr") # model data
+load("data/GU/BHGU2015DHS.rda")
+
+# rename it...
+
+brfile <- BH
 
 # selecting variables
 
-brfile <- zzbr[grep("caseid|^v0|^v1|^b", names(zzbr))]
+brfile <- brfile[grep("caseid|^v0|^v1|^b", names(brfile))]
 
 # define outcome and date of death
 
@@ -68,6 +71,7 @@ brfile$dod[!is.na(brfile$unit) & brfile$unit == 1] = brfile$b3[!is.na(brfile$uni
 brfile$dod[!is.na(brfile$unit) & brfile$death == TRUE & brfile$b7 < 24 & brfile$unit == 2 ] =
   brfile$b3[!is.na(brfile$unit) & brfile$death == TRUE & brfile$b7 < 24 & brfile$unit == 2 ] +
   brfile$b7[!is.na(brfile$unit) & brfile$death == TRUE & brfile$b7 < 24 & brfile$unit == 2 ] + 0.5
+
 brfile$dod[is.na(brfile$unit) & brfile$death == TRUE & brfile$b7 < 24 ] =
   brfile$b3[is.na(brfile$unit) & brfile$death == TRUE & brfile$b7 < 24  ] +
   brfile$b7[is.na(brfile$unit) & brfile$death == TRUE & brfile$b7 < 24  ] + 0.5
