@@ -107,3 +107,12 @@ plot1 <- tfr10 |>
   ) +
   theme_bw(base_size = 12)
 
+# saving plot
+
+ggsave(
+  plot1,
+  filename = "courses/indirect_methods/results/tfr_birthhistories_guatemala.jpeg",
+  device = "jpeg",
+  width = 10,
+  height = 6.5
+)
