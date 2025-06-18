@@ -93,9 +93,9 @@ for(i in seq_along(files)){
 plot1 <- tfr10 |>
   ggplot() +
   aes(x = year, y = tfr, color = survey) +
-  geom_point(size = 3) +
-  geom_line(linewidth = 1.1) +
-  geom_line(data = tfr3, color = "black",linewidth = 1.3) +
+  geom_point(size = 2) +
+  geom_line(linewidth = 1.0) +
+  geom_line(data = tfr3, color = "black",linewidth = 1.1) +
   geom_point(data = tfr3, color = "black", size = 4) +
   geom_smooth(mapping=aes(group=1), se=FALSE, colour='red',,linewidth = 1.3) +
   scale_x_continuous(breaks = seq(min(tfr10$year)-5,max(tfr10$year)+2,5)) +
@@ -106,4 +106,4 @@ plot1 <- tfr10 |>
     y = "TFR"
   ) +
   theme_bw(base_size = 12)
-plot1
+
