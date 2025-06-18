@@ -42,8 +42,7 @@ asfr_3 <- tabexp(irfile) |>
 
 tfr_3 <- sum(asfr_2$asfr * 5)
 
-
-# Fertility trends in 10 years --------------------------------------------
+# Fertility trends - comparing surveys -----------------------------------
 
 files <- list.files(file.path("data","GU_sbd_group"))
 i = 1
@@ -67,4 +66,24 @@ for(i in seq_along(files)){
   tfr_10$year <- round(ly-tfr_10$tips-0.5,0)
   tfr_3$year <- round(ly-tfr_3$tips,0)
 
+  # add survey variable
+  tfr_3 <- tfr_3 |>
+    mutate(survey = str_sub(files[i], end=-9))
+  tfr_10 <- tfr_10 |>
+    mutate(survey = str_sub(files[i], end=-9))
+
+  # pooling everything up
+  if(i == 1){
+    tfr3 <- tfr_3
+    tfr10 <- tfr_10
+  } else{
+    tfr3 <- tfr3 |>
+      bind_rows(tfr_3)
+
+    tfr10 <- tfr10 |>
+      bind_rows(tfr_10)
+  }
+  # next loop
+  rm(tfr_3,tfr_10)
+  print(paste0("finished the loop number: ",i,"!!!"))
 }
