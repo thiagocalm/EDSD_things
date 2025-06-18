@@ -87,3 +87,21 @@ for(i in seq_along(files)){
   rm(tfr_3,tfr_10)
   print(paste0("finished the loop number: ",i,"!!!"))
 }
+
+# plotting it...
+
+plot1 <- tfr10 |>
+  ggplot() +
+  aes(x = year, y = tfr, color = survey) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1.2) +
+  geom_line(data = tfr3, color = "black",linewidth = 1.3) +
+  geom_point(data = tfr3, color = "black", size = 4) +
+  scale_x_continuous(breaks = seq(min(tfr10$year)-5,max(tfr10$year)+2,5)) +
+  labs(
+    title = "Trends in TFR - Guatemala",
+    caption = "Source: DHS.",
+    x = "Calendar year",
+    y = "TFR"
+  ) +
+  theme_bw(base_size = 12)
