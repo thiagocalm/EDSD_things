@@ -45,7 +45,6 @@ tfr_3 <- sum(asfr_2$asfr * 5)
 # Fertility trends - comparing surveys -----------------------------------
 
 files <- list.files(file.path("data","GU_sbd_group"))
-i = 1
 
 for(i in seq_along(files)){
   # import data
@@ -115,4 +114,25 @@ ggsave(
   device = "jpeg",
   width = 10,
   height = 6.5
+)
+
+
+# Save tfrs ---------------------------------------------------------------
+
+# 10 years
+tfr10 <- tfr10 |>
+  select(year, tfr, survey)
+
+# 3 years
+tfr3 <- tfr3 |>
+  select(year, tfr, survey)
+
+# export it
+save(
+  tfr10,
+  file = file.path("courses","indirect_methods","data","tfr10.RData")
+)
+save(
+  tfr3,
+  file = file.path("courses","indirect_methods","data","tfr3.RData")
 )
