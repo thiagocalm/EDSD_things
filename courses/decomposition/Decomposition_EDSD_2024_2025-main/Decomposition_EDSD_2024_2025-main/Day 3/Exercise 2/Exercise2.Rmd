@@ -1,0 +1,200 @@
+---
+title: "Day 3, exercise 2: Age- and cause-specific decomposition of a difference between life expectancies"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+date: "2023-05-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The aim of this exercise is to illustrate how to decompose by age and cause the difference between two life expectancies, using the Arriaga method. While there are many methods that would lead to similar results, the Arriaga method is the most common for this specific calculation. Specifically, we will use data from Aburto et al. (2022), analysing the change in male life expectancy at birth in the USA between 2019 and 2020. The dataset contains the relative lifetables.
+
+First, load the data and the necessary packages. 
+
+```{r load, message=FALSE}
+load('Arriaga_COVID_USA.RData')
+
+library(tidyverse)
+library(data.table)
+```
+
+Now, let's look at the change in male life expectancy.
+```{r}
+data %>% filter(year==2020,age==0,sex==0) %>% pull(ex) %>% unique() - 
+  data %>% filter(year==2019,age==0,sex==0) %>% pull(ex) %>% unique()
+```
+
+Where does this decline come from? Let's investigate with the Arriaga decomposition.
+
+Let's start by decomposing by age only. We need to extract the information needed by the Arriaga formulas from the lifetables.
+
+```{r}
+l1 <- data %>%
+  filter(year==2019,sex==0, cause=="cvd") %>% 
+  pull(lx)
+l2 <- data %>%
+  filter(year==2020,sex==0, cause=="cvd") %>% 
+  pull(lx)
+d1 <- data %>%
+  filter(year==2019,sex==0, cause=="cvd") %>% 
+  pull(dx)
+d2 <- data %>%
+  filter(year==2020,sex==0, cause=="cvd") %>% 
+  pull(dx)
+L1 <- data %>%
+  filter(year==2019,sex==0, cause=="cvd") %>% 
+  pull(Lx)
+L2 <- data %>%
+  filter(year==2020,sex==0, cause=="cvd") %>% 
+  pull(Lx)
+T1 <- data %>%
+  filter(year==2019,sex==0, cause=="cvd") %>% 
+  pull(Tx)
+T2 <- data %>%
+  filter(year==2020,sex==0, cause=="cvd") %>% 
+  pull(Tx)
+```
+
+Now we can calculate each component. We will use the implementation suggested in Preston, Heuveline and Guillot (2001), which is the one you saw in class.
+
+```{r}
+LAG <- length(l1)
+
+DE <- (l1/l1[1])*((L2/l2)-(L1/l1))
+# Indirect and interaction effects
+IE <- (T2[-1]/l1[1])*((l1[-LAG]/l2[-LAG])-(l1[-1]/l2[-1]))
+# one extra value for the indirect component
+# since there is only direct component in the last age group
+IE <- c(IE,0)
+
+## add both to get the overall age-decomposition
+ALL_age <- DE+IE
+```
+
+Let's check our results by comparing them with the actual difference between the two life expectancies.
+
+```{r}
+# check
+# difference in life expectancies
+data %>% filter(year==2020,sex==0,age==0) %>% pull(ex) %>% unique() - 
+  data %>% filter(year==2019,sex==0,age==0) %>% pull(ex) %>% unique()
+
+# sum of age-specific contributions
+sum(ALL_age)
+```
+
+Now let's plot the effects to see which ages contributed the most.
+
+```{r}
+ggplot() +
+  ggtitle(bquote("Change in male"~"e"[0]~", USA 2019-2020")) +
+  geom_bar(aes(x = unique(data$age), y = (ALL_age)), stat="identity") +
+  scale_x_continuous("Age") +
+  scale_y_continuous("Contribution")
+```
+
+Which ages contributed the most to the changes in life expectancy in the USA? Is this surprising?
+
+Now let's try to add the cause-decomposition. We need to reshape the dataframe and calculate the age- and cause-specific contributions, again following the formula in Preston, Heuveline and Guillot (2001).
+
+```{r}
+ALL_cause <- data %>% 
+  filter(year==2019, sex==0) %>% 
+  inner_join(data %>% 
+               filter(year==2020, sex==0), by=c("age","cause"), suffix=c("_2019","_2020")) %>% # By having a wide dataframe (one column per year), we can multiply proportions from 2019 with proportions from 2020
+  mutate(cause_multiplier = (prop_2020*mx_2020-prop_2019*mx_2019)/(mx_2020-mx_2019)) %>% 
+  select(age, cause, cause_multiplier) %>% 
+  inner_join(ALL_age %>% 
+               cbind(age=0:100) %>% 
+               as.data.table() %>% 
+               rename(C = "."), by="age") %>%
+  mutate(C_cause = cause_multiplier*C)
+```
+
+Do the results match?
+
+```{r}
+# difference in life expectancies
+data %>% filter(year==2020,sex==0,age==0) %>% pull(ex) %>% unique() - 
+  data %>% filter(year==2019,sex==0,age==0) %>% pull(ex) %>% unique()
+
+# sum of age-specific contributions
+sum(ALL_cause$C)/8
+sum(ALL_age)
+
+# sum of age- and cause-specific contributions
+sum(ALL_cause$C_cause)
+```
+
+Now we can plot the results
+```{r}
+ALL_cause %>% 
+  ggplot() +
+  ggtitle(bquote("Change in male"~"e"[0]~", USA 2019-2020")) +
+  geom_bar(aes(x = age, y = (C_cause), fill=as.factor(cause)), stat="identity", position = "stack") +
+  scale_x_continuous("Age") +
+  scale_y_continuous("Contribution") +
+  coord_flip()
+```
+
+Single-age data can be rather volatile, especially when we are looking at cause-specific data. To remedy this, we can group ages in 5-year groups.
+
+```{r}
+ALL_cause %>% 
+  mutate(age_group = case_when(age %in% 0:4 ~ "0-4",
+                               age %in% 5:9 ~ "5-9",
+                               age %in% 10:14 ~ "10-14",
+                               age %in% 15:19 ~ "15-19",
+                               age %in% 20:24 ~ "20-24",
+                               age %in% 25:29 ~ "25-29",
+                               age %in% 30:34 ~ "30-34",
+                               age %in% 35:39 ~ "35-39",
+                               age %in% 40:44 ~ "40-44",
+                               age %in% 45:49 ~ "45-49",
+                               age %in% 50:54 ~ "50-54",
+                               age %in% 55:59 ~ "55-59",
+                               age %in% 60:64 ~ "60-64",
+                               age %in% 65:69 ~ "65-69",
+                               age %in% 70:74 ~ "70-74",
+                               age %in% 75:79 ~ "75-79",
+                               age %in% 80:84 ~ "80-84",
+                               age %in% 85:89 ~ "85-89",
+                               age %in% 90:94 ~ "90-94",
+                               age %in% 95:99 ~ "95-99",
+                               age %in% 100 ~ "100+"),
+         age_group = factor(age_group, levels = c("0-4",
+                                                  "5-9",
+                                                  "10-14",
+                                                  "15-19",
+                                                  "20-24",
+                                                  "25-29",
+                                                  "30-34",
+                                                  "35-39",
+                                                  "40-44",
+                                                  "45-49",
+                                                  "50-54",
+                                                  "55-59",
+                                                  "60-64",
+                                                  "65-69",
+                                                  "70-74",
+                                                  "75-79",
+                                                  "80-84",
+                                                  "85-89",
+                                                  "90-94",
+                                                  "95-99",
+                                                  "100+"))) %>% 
+  group_by(age_group, cause) %>% 
+  mutate(C_cause_group = sum(C_cause)) %>% 
+  ggplot() +
+  ggtitle(bquote("Change in male"~"e"[0]~", USA 2019-2020")) +
+  geom_bar(aes(x = age_group, y = (C_cause_group), fill=as.factor(cause)), stat="identity", position = "stack") +
+  scale_x_discrete("Age") +
+  scale_y_continuous("Contribution") +
+  coord_flip()
+```
+
+What are the ages and causes that contributed the most to the decline in male life expectancy at birth in the uSA between 2019 and 2020? 
