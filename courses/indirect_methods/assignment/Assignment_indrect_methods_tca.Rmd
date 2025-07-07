@@ -1,0 +1,28 @@
+---
+title: "Indirect estimation Assignment"
+author: "Emma & Thiago"
+date: "2025-06-19"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+#set up ###########################
+rm(list = ls())
+options(scipen = 9999999)
+
+#Packages ----------------------------
+packages <- c(
+  "rprojroot", "devtools", "rdhs", "demogsurv",
+  "DHS.rates", "tidyverse", "ipumsr", "ggplot2", 
+  "readxl", "haven")
+purrr::walk(packages, library, character.only = TRUE)
+
+#set wd -------------------------------
+project_root <- find_rstudio_root_file()
+setwd(project_root)
+getwd()
+#clear 
+
+data_wd <-"~/Desktop/EDSD/EDSD_RATVILLE/EDSD_DATA/INDIRECT_EST_DATA/"

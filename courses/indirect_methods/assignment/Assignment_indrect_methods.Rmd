@@ -1,0 +1,537 @@
+---
+title: "Indirect estimation Assignment"
+author: "Emma & Thiago"
+date: "2025-06-19"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+#set up ###########################
+rm(list = ls())
+
+#Packages ----------------------------
+packages <- c(
+  "rprojroot", "devtools", "rdhs", "demogsurv",
+  "DHS.rates", "tidyverse", "ipumsr", "ggplot2", 
+  "readxl", "haven")
+purrr::walk(packages, library, character.only = TRUE)
+
+#set wd -------------------------------
+project_root <- find_rstudio_root_file()
+setwd(project_root)
+getwd()
+#clear 
+
+source("tabexp/R/tabexp.R")
+
+data_wd <-"~/Desktop/EDSD/EDSD_RATVILLE/EDSD_DATA/INDIRECT_EST_DATA/"
+```
+
+For this assignment we chose to work on Guatemala.
+
+## Estimations of mortality
+
+### Estimations of child mortality
+
+*We decided to estimate child mortality using the full birth histories method using Demographic and Health Surveys*
+
+```{r child_mortality, echo=F}
+cat("Before running the data analysis: we are working on DHS surverys in Guatemala from 1987 to 2015 ")
+
+listDHS <- c("BHGU1987DHS", "BHGU1995DHS", "BHGU1999DHS", "BHGU2015DHS")
+
+# #Defining the data collection time ------------------------------------------
+# # dhs_surveys(countryIds= 'GU') 
+# 
+# survey_info <- data.frame(
+#   survey = c("BHGU1987DHS", "BHGU1995DHS", "BHGU1999DHS", "BHGU2015DHS"),
+#   fw_start = as.Date(c("1987-09-01", "1995-06-01", "1998-11-01", "2014-10-01")),
+#   fw_end = as.Date(c("1987-12-01", "1995-12-01", "1999-05-01", "2015-06-01")),
+#   stringsAsFactors = FALSE
+# )
+# 
+# survey_info$fw_midpoint <- survey_info$fw_start + 
+#   (survey_info$fw_end - survey_info$fw_start) / 2
+# 
+# survey_info$survey_year <- as.numeric(format(survey_info$fw_midpoint, "%Y")) + 
+#   as.numeric(format(survey_info$fw_midpoint, "%j")) / 365.25
+
+#LOOPING DATA TREATMENT + 5q0 -----------------------------------------------
+
+# Function for computing nqx from each survey
+calc_nqx_survey <- function(file_name) {
+  print(file_name)
+  
+  obj_name <- load(paste0(data_wd,"GU3/", file_name, ".rda"))  
+  data <- get(obj_name)
+  
+  # #if (!"v024" %in% names(data)) { #region
+  #    message("We don't have the variable on region of residence for ", file_name, " so we set v024 = 1")
+  #   data <- data %>%
+  #     mutate(v024 = 1)
+  # }
+  
+  # if (!"v025" %in% names(data)) { #place of residence 
+  #   message("We don't have the variable on place of residence for ", file_name, " so we set v025 = 1")
+  #   data <- data %>%
+  #     mutate(v025 = 1)
+  # }
+  
+  if (!"v021" %in% names(data)) { #case ID => necessary 
+    message("We have to skip ", file_name, " due to missing case ID variable")
+    return(NULL)
+  }
+  
+  brfile <- data[grep("caseid|^v0|^v1|^b", names(data))]
+  brfile$death <- brfile$b5 == 0
+  brfile$dod <- NA
+  brfile$unit <- trunc(brfile$b6 / 100)
+  brfile$value <- brfile$b6 - brfile$unit * 100
+  
+  # Days
+  brfile$dod[!is.na(brfile$unit) & brfile$unit == 1] <-
+    brfile$b3[!is.na(brfile$unit) & brfile$unit == 1] +
+    brfile$value[!is.na(brfile$unit) & brfile$unit == 1] / 28 + 0.5 / 28
+  
+  # Months under 2 years
+  brfile$dod[!is.na(brfile$unit) & brfile$death & brfile$b7 < 24 & brfile$unit == 2] <-
+    brfile$b3[!is.na(brfile$unit) & brfile$death & brfile$b7 < 24 & brfile$unit == 2] +
+    brfile$b7[!is.na(brfile$unit) & brfile$death & brfile$b7 < 24 & brfile$unit == 2] + 0.5
+  
+  brfile$dod[is.na(brfile$unit) & brfile$death & brfile$b7 < 24] <-
+    brfile$b3[is.na(brfile$unit) & brfile$death & brfile$b7 < 24] +
+    brfile$b7[is.na(brfile$unit) & brfile$death & brfile$b7 < 24] + 0.5
+  
+  # Years 2+
+  brfile$dod[brfile$death & brfile$b7 >= 24] <-
+    brfile$b3[brfile$death & brfile$b7 >= 24] +
+    trunc(brfile$b7[brfile$death & brfile$b7 >= 24] / 12) * 12 + 6
+  
+  brfile$b4 <- as.factor(brfile$b4)
+  
+  #5q0
+  nqx_result <- calc_nqx(brfile, agegr=c(0, 1, 3, 5, 12, 24, 36, 48, 60)/12)
+  
+  # Add year information
+  year <- mean(brfile$v008 / 12 + 1900, na.rm = TRUE) #we convert the CMC into a date + take the mean date (based on days)
+
+  nqx_result$year <- year
+  nqx_result$survey <- file_name
+  
+  return(nqx_result)
+}
+
+nqx_full <- lapply(listDHS, FUN = calc_nqx_survey)
+nqx_combined <- do.call(rbind, nqx_full)
+cat("Note that the year variable was computed in the loop by converting the DHS century month 
+codes into a calendar year and then averaging accross all cases in the file. ")
+nqx_combined
+
+cat("Now we calculate reference years for appropriate plotting, we have produced
+arguments for the period. For the period 0-4 => this is data collected at 5 year
+period before the survey, then 10 years before the survey etc...
+To ensure that the measured 5q0 is placed on the right part of the x axis, 
+we defined the midpoints that are then added to the new calculated year (with decimals).")
+
+calculate_reference_years <- function(nqx_data) {
+  
+  nqx_data$reference_year <- NA
+  
+  if("tips" %in% names(nqx_data)) {
+
+      period_midpoints <- case_when(
+      nqx_data$tips == "0-4" ~ -2.5,
+      nqx_data$tips == "5-9" ~ -7.5,
+      nqx_data$tips == "10-14" ~ -12.5
+      )
+    
+    nqx_data$reference_year <- nqx_data$year + period_midpoints
+  } else {
+    
+  }
+  
+  return(nqx_data)
+}
+
+nqx_combined <- calculate_reference_years(nqx_combined)
+nqx_combined
+
+nqx_combined <- nqx_combined %>%
+  mutate(est = est * 1000, ci_l = ci_l * 1000, ci_u = ci_u * 1000)
+
+#adding comparisons with the UN Inter-agency Group for Child Mortality
+GU_U5_UNIG <- read_csv(paste0(data_wd,"GU_U5_UNIG.csv"), skip = 5, show_col_types = FALSE)
+GU_U5_UNIG <- GU_U5_UNIG %>% 
+  rename("year" = "Year" , "est" = "Estimate" , "ci_l" = "Lower bound" ,  
+         "ci_u"= "Upper bound" )
+GU_U5_UNIG$survey <- "UN IGME"
+
+#plotting ------------------------------------------------------------
+
+ggplot(nqx_combined, aes(x = reference_year, y = est, group = survey)) +
+  geom_ribbon(aes(ymin = ci_l, ymax = ci_u, fill = survey), alpha = 0.2, color = NA) +
+  geom_line(aes(color = survey), linewidth = 0.8) +
+  geom_point(aes(color = survey), size = 2) +
+  geom_ribbon(data = GU_U5_UNIG, aes(x = year, ymin = ci_l, ymax = ci_u, fill = survey), 
+              alpha = 0.2, color = NA) +
+  geom_line(data = GU_U5_UNIG, aes(x = year, y = est, color = survey), linewidth = 0.5) +
+  scale_color_manual(values = c("UN IGME" = "blue", 
+                               setNames(rainbow(length(unique(nqx_combined$survey))), 
+                                       unique(nqx_combined$survey)))) +
+  scale_fill_manual(values = c("UN IGME" = "lightblue", 
+                              setNames(rainbow(length(unique(nqx_combined$survey)), alpha = 0.3), 
+                                      unique(nqx_combined$survey)))) +
+  labs(title = "Under-5 Mortality Rate in Guatemala", 
+       x = "Reference Year", 
+       y = "5q0 per 1000",
+       color = "Data Source",
+       fill = "Data Source",
+       caption = "Data: DHS and UN IGME") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+```
+
+When comparing our estimates of under-5 mortality derived from DHS full birth histories with those published by the UN Inter-agency Group for Child Mortality Estimation (UN IGME), we observe a strong overall consistency in the downward trend.
+
+A noteworthy point is that data from more distant periods (further from the survey collection date) can be expected to be less reliable due to recall bias and broader uncertainty. But this doesn't clearly manifest in our results as we observe that earlier periods generally follow the same trajectory as the UN IGME curve.  
+
+An interesting discrepancy appears in the mid-to-late 1990s: the 1999 DHS (green) produces notably lower mortality estimates than the 1995 DHS (red) for similar time periods. The UN IGME estimates fall between the two, suggesting that either source alone might misrepresent the actual level of mortality during that time. This highlights the value of multiple survey rounds.
+
+### Estimations of adult mortality
+
+*Indirectly estimate adult mortality from the orphanhood method Timæus (1992), or extract the probability 45q15 based on sibling survival data*
+
+## Estimations of fertility
+
+```{r fertility, echo=F}
+
+cat("First, we compute direct estimates using the calc_tfr() function from the demogsurv package.")
+
+### function to apply to each survey for computing fertility trends
+listDHS <- c("GUIR71FL", "GUIR41FL", "GUIR34FL", "GUIR01FL")
+data_wd <- "~/Desktop/EDSD/EDSD_RATVILLE/EDSD_DATA/INDIRECT_EST_DATA/GU_sbd_group2/"
+
+tfrtrend <- function(file_name) {
+  DHS <- read_dta(paste0(data_wd,file_name,"_sbd.dta"))  #%>%  
+    #select(all_of(advar)) 
+  #debug 
+  if (!"v021" %in% names(DHS)) {
+    message("We have to rename the case ID variable to v021, because the "
+            , file_name, " DHS has a different case ID variable name")
+    DHS <- DHS %>%
+      rename(v021 = v001)
+  }
+  if (!"v024" %in% names(DHS)) {
+    message("We don't have the variable on region of residence for "
+            , file_name, " so we set v024 = 1")
+    DHS <- DHS %>%
+      mutate(v024 = 1)
+  }
+  if (!"v025" %in% names(DHS)) {
+    message("We don't have the variable on place of residence for "
+            , file_name, " so we set v025 = 1")
+    DHS <- DHS %>%
+      mutate(v025 = 1)
+  }
+  #end debug 
+  tfr_tr <- calc_tfr(DHS, tips=0:10)
+  ly<-mean(DHS$v008/12+1900)
+  tfr_tr$tips <- as.numeric(levels(tfr_tr$tips))
+  tfr_tr$year=ly-tfr_tr$tips-0.5
+  tfr_tr <- mutate(tfr_tr, survey=file_name) ## to distinguish the files
+}
+
+tfrtrend_full <- lapply(listDHS, FUN=tfrtrend) 
+tfrtrend_GU <- as.data.frame(do.call(rbind, tfrtrend_full))  
+
+tfrtrend_fig_GU <- ggplot(tfrtrend_GU, aes(year, tfr, group=survey, colour=survey))+
+  ylim(3, 7.5) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Date", y = "TFR", title = "Trends in TFR in Guatemala") + 
+  theme_bw()
+
+
+# adding the previously measured estimates -----------------------
+# function for computing TFRs from each survey
+tfr3 <- function(file_name) {
+  print(file_name)
+  DHS <- read_dta(paste0(data_wd,file_name,"_sbd.dta"))
+  
+  mytab <- tabexp(DHS)
+  
+  tfr_2 <- mytab %>%
+    filter(YBS<3 & age_group!="[10,15)") %>% ## we could also filter to remove the two upper age groups
+    group_by(age_group) %>%
+    summarise(births=sum(events), exposure=sum(exposure_py), year=mean(mid_year),.groups = "drop") %>%
+    mutate(asfr=births/exposure) %>%
+    summarise(tfr = sum(asfr)*5, year = mean(year)) %>%
+    select(tfr, year)
+}
+
+# applying the function on each survey of listDHS
+tfr_full <- lapply(listDHS, FUN=tfr3)
+
+#visualise the results again  => NO SE --------------
+tfr_full_GU <- as.data.frame(do.call(rbind, tfr_full)) 
+
+cat("Then we extract published estimates from the DHS surveys.")
+
+#Census data direct ##################################
+data_wd <-"~/Desktop/EDSD/EDSD_RATVILLE/EDSD_DATA/INDIRECT_EST_DATA/"
+
+cat("Using IPUMS data with survey data, we get tfr direct estimates 
+    for 4 censuses")
+
+ddi <- read_ipums_ddi(paste0(data_wd, "ipumsi_00003.xml"))
+Guat <- read_ipums_micro(ddi)
+
+# 2002 ############################################
+
+## Keep Guatemala - create a dummy variable for birth
+Guat_2002 <- Guat %>%
+  filter(COUNTRY==320 & YEAR == 2002 & SEX ==2 & AGE2>3 & AGE2 < 18) %>%
+  mutate(birth2002 = if_else(LASTBYR == 2002,1,0))
+
+# Parse date with lubridate
+census_date <- ymd("2002-11-24") 
+ref_date <- ymd("2002-01-01") 
+
+# Compute days since Jan 1, 2002 - and then the fraction of the year (exposure)
+days_since <- as.numeric(census_date - ref_date)
+fract_year <- days_since/365
+
+asfr_02 <- Guat_2002 %>%
+  group_by(AGE2) %>%
+  summarise(asfr=mean(birth2002/fract_year))
+
+
+
+tfr_02 <- 5*sum(asfr_02$asfr)
+
+
+# 1994 ############################################
+
+## Keep Guatemala - create a dummy variable for birth
+Guat_1994 <- Guat %>%
+  filter(COUNTRY==320 & YEAR == 1994 & SEX ==2 & AGE2>3 & AGE2 < 18) %>%
+  mutate(birth1994 = if_else(LASTBYR == 1994,1,0))
+
+# Parse date with lubridate
+census_date <- ymd("1994-04-17") 
+ref_date <- ymd("1994-01-01") 
+
+# Compute days since Jan 1, 2002 - and then the fraction of the year (exposure)
+days_since <- as.numeric(census_date - ref_date)
+fract_year <- days_since/365
+
+asfr_94 <- Guat_1994 %>%
+  group_by(AGE2) %>%
+  summarise(asfr=mean(birth1994/fract_year))
+
+
+
+tfr_94 <- 5*sum(asfr_94$asfr)
+
+
+# 1981 ############################################
+
+## Keep Guatemala - create a dummy variable for birth
+Guat_1981 <- Guat %>%
+  filter(COUNTRY==320 & YEAR == 1981 & SEX ==2 & AGE2>3 & AGE2 < 18) %>%
+  mutate(birth1981 = if_else(LASTBYR == 1981,1,0))
+
+# Parse date with lubridate
+census_date <- ymd("1981-03-23") 	
+ref_date <- ymd("1981-01-01") 
+
+# Compute days since Jan 1, 2002 - and then the fraction of the year (exposure)
+days_since <- as.numeric(census_date - ref_date)
+fract_year <- days_since/365
+
+asfr_81 <- Guat_1981 %>%
+  group_by(AGE2) %>%
+  summarise(asfr=mean(birth1981/fract_year))
+
+
+
+tfr_81 <- 5*sum(asfr_81$asfr)
+
+
+# 1973 ############################################
+
+## Keep Guatemala - create a dummy variable for birth
+Guat_1973 <- Guat %>%
+  filter(COUNTRY==320 & YEAR == 1973 & SEX ==2 & AGE2>3 & AGE2 < 18) %>%
+  mutate(birth1973 = if_else(LASTBYR == 1973,1,0))
+
+# Parse date with lubridate
+census_date <- ymd("1973-03-26") 	
+ref_date <- ymd("1973-01-01") 
+
+# Compute days since Jan 1, 2002 - and then the fraction of the year (exposure)
+days_since <- as.numeric(census_date - ref_date)
+fract_year <- days_since/365
+
+asfr_73 <- Guat_1973 %>%
+  group_by(AGE2) %>%
+  summarise(asfr=mean(birth1973/fract_year))
+
+
+tfr_73 <- 5*sum(asfr_73$asfr)
+
+
+#Merge them all together ##########################
+year <- c(1973, 1981, 1994, 2002)
+tfr <- c(tfr_73, tfr_81, tfr_94, tfr_02)
+survey <- c("1973 census", "1981 census", "1994 census", "2002 census")
+tfr_dir <- data.frame(year, tfr, survey)
+
+#Load CSV for indirect methods!! ##################
+cat("Finally, we used the excel spreadsheets to apply the reverse survival
+  method to get indirect estimates of the TFR in the years prior to the census.")
+
+ind_tfr <- read_excel(paste0(data_wd, "tfr_ind.xlsx"))
+length(ind_tfr$year)
+
+# Comparison with survey estimates ------------------------------
+tfrtrend_GU <- as.data.frame(do.call(rbind, tfrtrend_full))  
+
+all_tfr <- bind_rows(tfrtrend_GU, tfr_dir)  
+
+tfrtrend_fig_GU_3 <- ggplot(tfrtrend_GU, aes(year, tfr, group=survey, colour=survey))+
+  ylim(3, 7.5) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Date", y = "TFR", title = "Trends in TFR in Guatemala") + 
+  theme_bw()
+
+
+```
+
+
+```{r fertility-plot, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=6}
+#adding the trend based on the TFRs ----------------------------------------
+
+cat("We also downloaded data from the WPP to get official estimates for comparisons.")
+#download tfr data 
+wpp_tfr <- read_excel(paste0(data_wd, "WPP_tfr.xlsx")) %>% 
+  mutate(year = as.numeric(year))
+
+#bind all together 
+
+tfrtrend_fig_GU_4 <- tfrtrend_fig_GU_3 +
+  geom_smooth(tfrtrend_GU, mapping = aes(year, tfr, group = 1), se = FALSE, colour = "red", size=.8) +
+   geom_point(tfr_dir, mapping = aes(year, tfr, group = 1), shape = 17, size=3) +
+  geom_point(ind_tfr, mapping = aes(year, tfr, group = 1), colour = "skyblue", shape = 4, size=2) +
+  geom_line(ind_tfr, mapping = aes(year, tfr, group = 1), colour = "skyblue", size = .8) + 
+  geom_point(tfr_full_GU, mapping=aes(year, tfr, group=1), colour='black', size = 2) +
+  geom_line(tfr_full_GU, mapping=aes(year, tfr, group=1), colour='black', size = .5)
+  
+# to make the legend"ing" better :) 
+tfrtrend_GU$type <- "Direct estimates from surveys"
+tfr_dir$type <- "Direct estimates from censuses"
+ind_tfr$type <- "Indirect estimates - Reverse survival 2002"
+tfr_full_GU$type <- "Published estimates"
+wpp_tfr$type <- "World Population Prospects"
+
+tfrtrend_fig_GU_5 <- 
+  ggplot() +
+  geom_smooth(
+    data = tfrtrend_GU,
+    mapping = aes(x = year, y = tfr, colour = "Survey TFR trend"),
+    se = FALSE, linewidth = 1
+  ) +
+  geom_point(
+    data = tfrtrend_GU,
+    mapping = aes(x = year, y = tfr, colour = survey, shape = type),
+    size = 1.5
+  ) +
+  geom_line(
+    data = tfrtrend_GU,
+    mapping = aes(x = year, y = tfr, colour = survey),
+    linewidth = 0.5
+  ) +
+  geom_point(
+    data = tfr_dir,
+    mapping = aes(x = year, y = tfr, colour = survey, shape = type),
+    size = 3
+  ) +
+  geom_point(
+    data = ind_tfr,
+    mapping = aes(x = year, y = tfr, colour = type, shape = type),
+    size = 3
+  ) +
+  geom_line(
+    data = ind_tfr,
+    mapping = aes(x = year, y = tfr, colour = type),
+    linewidth = 0.8
+  ) +
+  geom_point(
+    data = tfr_full_GU,
+    mapping = aes(x = year, y = tfr, colour = type, shape = type),
+    size = 3
+  ) +
+  geom_line(
+    data = tfr_full_GU,
+    mapping = aes(x = year, y = tfr, colour = type),
+    linewidth = 0.8
+  ) +
+  geom_line(
+    data = wpp_tfr,
+    mapping = aes(x = year, y = tfr, colour = type),
+    linewidth = 0.8
+  ) +
+  labs(
+    x = "Year",
+    y = "TFR",
+    title = "Trends in TFR in Guatemala",
+    colour = "Legend",
+    shape = "Legend", 
+    caption = "Data: DHS, IPUMS, WPP"
+  ) +
+  scale_colour_manual(
+    values = c(
+      "1973 census" = "#E41A1C",
+      "1981 census" = "#984EA3",
+      "1994 census" = "#4DAF4A",
+      "2002 census" = "#377EB8",
+      "GUIR01FL" = "#00CED1",
+      "GUIR34FL" = "#7B68EE",
+      "GUIR41FL" = "#DA70D6",
+      "GUIR71FL" = "#FF69B4",
+      "Survey TFR trend" = "red",
+      "Indirect estimates - Reverse survival 2002" = "skyblue",
+      "Published estimates" = "black",
+      "World Population Prospects" = "orange"
+    )
+  ) +
+  scale_shape_manual(
+    values = c(
+      "Published estimates" = 16,
+      "Indirect estimates - Reverse survival 2002" = 15,
+      "Direct estimates from surveys" = 16,
+      "Direct estimates from censuses" = 17
+    )
+  ) +
+  theme_bw()
+
+tfrtrend_fig_GU_5
+
+```
+The overall trend in TFR in Guatemala since the 1960s is one of consistent decline. This downward trajectory is visible across all types of estimates used — direct, indirect, and smoothed survey trends.
+
+By comparing direct estimates from the DHS surveys, indirect estimates, and published survey estimates, we observe differences that highlight the need for caution in interpreting these results. 
+
+Direct DHS estimates offer the richest information on TFR trends, especially because they extend further back in time and provide continuous year-by-year estimates. And looking at different points of direct estimates using DHS data gives more information than the official published estimates. The smoothed red line drawn from survey estimates gives a general trajectory which is useful given that the estimates we get from the DHS surveys have to be analysed with caution given that there is a consistent heaping of the tfr 5 years prior to the survey for displacement reasons. 
+
+The direct estimates from censuses suggest different tfr values than the ones from the surveys, although the overall trajectory seems to be similar. In particular, the 2002 census appears to suggest a steeper or sudden shift of the tfr compared to the smoother trends presented by the survey results.
+
+Looking at the indirect estimates based on reverse survival from the 2002 census, we obtain a more detailed year-by-year trajectory. These estimates show that although the overall trend is downward, there may have been fluctuations in fertility decline.
+
+When compared with the World Population Prospects estimates, we observe an overall adequation with the tfr estimates from the direct and indirect methods. However, the WPP estimates diverge noticeably from the 2002 census-based estimates in the 2000s. 
+
+Our conclusion from this analysis is that the triangulation of data sources and methods (both direct and indirect) to measure fertility trends increases the confidence we can have in the estimates. 
