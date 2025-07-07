@@ -83,3 +83,13 @@ dist.om = seqdist(
 
 # looking at the first values
 dist.om[1:5,1:5] # reference
+
+
+# Clustering  --------------------------------------------------
+
+#...
+
+
+# Describing clusters -----------------------------------------------------
+
+#...
