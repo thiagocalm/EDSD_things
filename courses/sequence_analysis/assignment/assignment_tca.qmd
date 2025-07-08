@@ -14,6 +14,7 @@ format:
         \usepackage{fancyhdr}
         \usepackage{graphicx}
         \usepackage{fvextra}
+        \usepackage{l3kernel}
         \pagestyle{fancy}
         \fancyhf{}
         \fancyhead[L]{Sequence Analysis' Assignment}
@@ -336,50 +337,18 @@ levels(clusters5)=c(
 
 To describe the groups, let's plot the distribution of trajectories, based on each cluster.
 
-```{r}
-
-# all the sequences for each cluster
-seqIplot(
-  df.seq,
-  group=clusters5,
-  border=NA,
-  space=0,
-  main = levels(clusters5)
-)
-
-```
+![Trajectories for each cluster](images/trajectories_clusters.jpeg){fig-align="center" width="100%"}
 
 
-#4. 
+#4. (Optional) Describe group differences in the the distribution of life course clusters
 
 For describing group differences in the distribution of life course by cluster, we can use different measures. Here we will use two of them: duration on each state and distribution of states over life course.
 
   - Duration on each state by cluster
 
-```{r}
-
-# duration of each cluster
-
-seqmtplot(
-  df.seq,
-  group = clusters5,
-  border=NA,
-  space=0,
-  main = levels(clusters5)
-)
-
-```
+![Duration on each state by cluster](images/duration_clusters.jpeg){fig-align="center" width="100%"}
 
   - Distribution of states over life course by cluster
 
-```{r}
-# distribution of each cluster over observational window
-seqdplot(
-  df.seq,
-  group=clusters5,
-  border=NA,
-  space=0,
-  main = levels(clusters5)
-)
-```
+![Distribution of states over life course by cluster](images/distribution_clusters.jpeg){fig-align="center" width="100%"}
 
