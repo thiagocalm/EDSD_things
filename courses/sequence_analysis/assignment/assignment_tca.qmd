@@ -1,0 +1,385 @@
+---
+title: "EDSD 2024–2025: Sequence Analysis' Assignment"
+author:
+  - "Thiago C. Almeida"
+date: "`r Sys.Date()`"
+format:
+  pdf:
+    pdf-engine: xelatex
+    number-sections: true
+    toc: true
+    header-includes:
+      - \KOMAoption{captions}{tableheading}
+      - |
+        \usepackage{fancyhdr}
+        \usepackage{graphicx}
+        \usepackage{fvextra}
+        \pagestyle{fancy}
+        \fancyhf{}
+        \fancyhead[L]{Sequence Analysis' Assignment}
+        \fancyhead[R]{\includegraphics[height=30pt]{edsd_logo.jpeg}}
+        \fancyfoot[C]{\thepage}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{
+          commandchars=\\\{\},
+          breaklines=true,
+          breakanywhere=true,
+          fontsize=\small
+        }
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+# setups
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+```{r packages, include=FALSE}
+
+# general settings
+rm(list = ls()) # removing all items of environment
+invisible(gc()) # cleaning the storage memory of the computer
+
+# packages
+library(pacman)
+p_load(tidyverse, TraMineR, RColorBrewer, WeightedCluster, cluster, haven, Hmisc, ggdendro, patchwork)
+
+# project roots
+project_root <- here::here()
+setwd(project_root)
+
+# general setups for graphs
+graph_size = 8
+
+```
+
+```{r load-data, include=FALSE}
+load("outputs_sequence.RData")
+df <- read_dta(
+  "../../../data/PartnerBirthbio.dta"
+)
+```
+
+For this assignment, we will work with data provided to illustrate life course trajectories of a sample of individuals from the German Family Panel (pairfam) data.
+
+We will work with four different partnership states to construct the trajectories:
+
+  - $S$: Single
+  
+  - $LAT$: Living Apart Together
+  
+  - $COH$: Cohabiting
+  
+  - $MAR$: Married
+
+```{r data-wrangling, include=FALSE}
+
+
+# reconding variable
+
+df <- df |>
+  mutate_all(
+    ~(case_when(
+      . < 3 ~ 1,            # Single
+      . %in% c(3,4) ~ 2,    # LAT
+      . %in% c(5,6) ~ 3,    # Cohabiting
+      . > 6 ~ 4,           # Married
+      TRUE ~ NA_integer_)
+  )) |>
+  na.omit()
+
+
+```
+
+Once we identified some missing values either for the states or for individual weights, we opted to exclude these individuais of our sample.
+
+We ended up with `r paste0(round(dim(df)[1],0))` individuais to compute the sequences.
+
+# 1. Import the data in R and describe the distribution of life states using relevant sequence analysis tools, including tables, indexes and figures.
+
+First step is to create the dataset based on the sequences to describe the distribution of life states.
+
+```{r}
+sa.states <- c("S", "LAT", "COH", "MAR")
+sa.labels <-  c("Single", "LAT", "Cohabiting", "Married")
+
+# create state sequence object
+df.seq <- seqdef(
+  df,
+  labels = sa.labels,
+  states = sa.states,
+  weights = df$weight40
+)
+```
+
+To describe the distribution of life course states, we can use different measures.
+
+  1. Time spent in different states
+
+```{r}
+
+# 1 - Time spent in different states
+
+seqmeant(seqdss(df.seq),serr = TRUE)
+```
+
+  2. Number of transitions
+
+```{r}
+# 2 - Number of transitions
+
+wtd.mean(seqtransn(df.seq), df$weight40)
+
+```
+
+  3. Transition matrix between states
+
+```{r}
+# 3 - Transition matrix between states
+
+seqtrate(df.seq, weighted = TRUE)
+
+```
+
+  4. State distribution at different ages (measured in months since the individuais started to be followed)
+
+```{r}
+# 4 - State distribution at different ages
+
+seqstatd(df.seq)$Frequencies[,c(1, seq(24, 264, by = 48))] # ages = 18, 20, 24, 28, 32, 36, 40
+
+```
+
+  5. The 10 most frequent sequences
+
+```{r}
+# 5 - 10 most frequent sequences
+
+seqtab(df.seq)
+
+```
+
+  6. Plot of all the sequences
+
+```{r}
+# 6 - Plot of sequences
+
+seqIplot(df.seq)
+```
+
+# 2. Calculate life course dissimilarities in the data
+
+To compute the life course dissimilarities based on the data we are using, we applied a data-driven approach to compute the indel and similarity matrix, based on the transition matrix to assign the transition costs.
+
+```{r dissimilarity,eval=FALSE}
+# we will use a not arbitrary indel value based on the transition matrix
+trcost <- seqcost(df.seq, method="TRATE")
+
+# calculating distance matrix
+
+dist.om <- seqdist(
+  df.seq,
+  method="OM",
+  indel=trcost$indel,
+  sm=trcost$sm
+)
+```
+
+# 3. Use a clustering methods to derive typical trajectories and describe groups
+
+First, let's analyze the clustering distance distribution based on different number of clusters.
+
+```{r,eval=FALSE}
+
+# aglomerative nesting. it is a way to create a cluster based on different methods
+
+clusterward <-  agnes(
+  dist.om, # dissimilarity matrix
+  diss = T, # start with dissimilarity matrix
+  method = "ward" # method to calculate it
+)
+
+```
+
+```{r}
+# dendrogram analysis
+
+wardClust <- hclust(as.dist(dist.om), method = "ward.D2")
+
+
+# statistical indicators
+
+avgClustQual <- as.clustrange(
+  clusterward,
+  diss=dist.om,
+  weights = df$weight40,
+  ncluster=20
+)
+
+```
+
+```{r plot,include=FALSE}
+## plots
+
+# dendro
+
+dendro_plot <- ggdendrogram(
+  data = wardClust, rotate = TRUE
+) +
+  theme(
+    axis.text.y = element_blank()
+  )
+
+# statistics
+
+indicators_plot <- avgClustQual$stats |>
+  as_tibble() |>
+  mutate(
+    cluster = as.factor(str_remove(rownames(avgClustQual$stats),"cluster")),
+    cluster = fct_reorder(cluster,2:20)
+  ) |>
+  select(any_of(c("R2sq","ASW","HC","HG","PBC","cluster"))) |>
+  pivot_longer(
+    1:5,
+    values_to = "ind_value",
+    names_to = "ind_name"
+  ) |>
+  ggplot() +
+  aes(x = cluster, y = ind_value, group = ind_name, color = ind_name) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 3) +
+  scale_color_brewer(palette = "Set3") +
+  labs(
+    y = "Indicator"
+  ) +
+  theme_light() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold")
+  )
+
+# first derivative
+
+indicators2_plot <- avgClustQual$stats |>
+  as_tibble() |>
+  mutate(
+    cluster = as.factor(str_remove(rownames(avgClustQual$stats),"cluster")),
+    cluster = fct_reorder(cluster,2:20)
+  ) |>
+  select(any_of(c("R2sq","ASW","HC","HG","PBC","cluster"))) |>
+  pivot_longer(
+    1:5,
+    values_to = "ind_value",
+    names_to = "ind_name"
+  ) |>
+  arrange(ind_name, cluster) |>
+  mutate(
+    ind_value_lag = lead(ind_value),
+    diff_value = ind_value_lag - ind_value,
+    diff_value = lag(diff_value),
+    .by = c(ind_name)
+  ) |>
+  filter(!is.na(diff_value)) |>
+  ggplot() +
+  aes(x = cluster, y = diff_value, group = ind_name, color = ind_name) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 3) +
+  scale_color_brewer(palette = "Set3") +
+  labs(
+    y = "First derivative of Indicators"
+  ) +
+  theme_light() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold")
+  )
+
+plot_dend_stat <- dendro_plot + indicators_plot + indicators2_plot
+
+plot_dend_stat
+```
+
+Based on the statistic indicators PBC and HG, we the best number of clusters to be chosen is 5.
+
+```{r choosing-number-of-clusters}
+
+
+clusters5 = cutree(clusterward, k = 5) # choosing the number of clusters
+
+df$clusters <- clusters5
+
+```
+
+```{r,include=FALSE}
+
+
+# typical trajectories
+dc = disscenter(dist.om, group= clusters5, medoids.index="first")
+medoid_seq <- print(df.seq[dc,], format = "SPS")
+medoid_seq[[1]]
+
+# levels for clusters
+
+# giving a label to these clusters
+
+levels(clusters5)=c(
+  medoid_seq[[1]],
+  medoid_seq[[2]],
+  medoid_seq[[3]],
+  medoid_seq[[4]],
+  medoid_seq[[5]]
+)
+
+```
+
+To describe the groups, let's plot the distribution of trajectories, based on each cluster.
+
+```{r}
+
+# all the sequences for each cluster
+seqIplot(
+  df.seq,
+  group=clusters5,
+  border=NA,
+  space=0,
+  main = levels(clusters5)
+)
+
+```
+
+
+#4. 
+
+For describing group differences in the distribution of life course by cluster, we can use different measures. Here we will use two of them: duration on each state and distribution of states over life course.
+
+  - Duration on each state by cluster
+
+```{r}
+
+# duration of each cluster
+
+seqmtplot(
+  df.seq,
+  group = clusters5,
+  border=NA,
+  space=0,
+  main = levels(clusters5)
+)
+
+```
+
+  - Distribution of states over life course by cluster
+
+```{r}
+# distribution of each cluster over observational window
+seqdplot(
+  df.seq,
+  group=clusters5,
+  border=NA,
+  space=0,
+  main = levels(clusters5)
+)
+```
+
