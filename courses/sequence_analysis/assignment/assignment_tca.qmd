@@ -14,7 +14,6 @@ format:
         \usepackage{fancyhdr}
         \usepackage{graphicx}
         \usepackage{fvextra}
-        \usepackage{l3kernel}
         \pagestyle{fancy}
         \fancyhf{}
         \fancyhead[L]{Sequence Analysis' Assignment}
@@ -61,6 +60,8 @@ df <- read_dta(
 )
 ```
 
+# Introduction
+
 For this assignment, we will work with data provided to illustrate life course trajectories of a sample of individuals from the German Family Panel (pairfam) data.
 
 We will work with four different partnership states to construct the trajectories:
@@ -94,13 +95,13 @@ df <- df |>
 
 Once we identified some missing values either for the states or for individual weights, we opted to exclude these individuais of our sample.
 
-We ended up with `r paste0(round(dim(df)[1],0))` individuais to compute the sequences.
+We ended up with `r paste0(round(dim(df)[1],0))` individuals to compute the sequences.
 
-# 1. Import the data in R and describe the distribution of life states using relevant sequence analysis tools, including tables, indexes and figures.
+# Import the data in R and describe the distribution of life states using relevant sequence analysis tools, including tables, indexes and figures.
 
 First step is to create the dataset based on the sequences to describe the distribution of life states.
 
-```{r}
+```{r,echo = FALSE}
 sa.states <- c("S", "LAT", "COH", "MAR")
 sa.labels <-  c("Single", "LAT", "Cohabiting", "Married")
 
@@ -117,7 +118,7 @@ To describe the distribution of life course states, we can use different measure
 
   1. Time spent in different states
 
-```{r}
+```{r,echo = FALSE}
 
 # 1 - Time spent in different states
 
@@ -126,7 +127,7 @@ seqmeant(seqdss(df.seq),serr = TRUE)
 
   2. Number of transitions
 
-```{r}
+```{r,echo = FALSE}
 # 2 - Number of transitions
 
 wtd.mean(seqtransn(df.seq), df$weight40)
@@ -135,7 +136,7 @@ wtd.mean(seqtransn(df.seq), df$weight40)
 
   3. Transition matrix between states
 
-```{r}
+```{r,echo = FALSE}
 # 3 - Transition matrix between states
 
 seqtrate(df.seq, weighted = TRUE)
@@ -144,31 +145,14 @@ seqtrate(df.seq, weighted = TRUE)
 
   4. State distribution at different ages (measured in months since the individuais started to be followed)
 
-```{r}
+```{r,echo = FALSE}
 # 4 - State distribution at different ages
 
 seqstatd(df.seq)$Frequencies[,c(1, seq(24, 264, by = 48))] # ages = 18, 20, 24, 28, 32, 36, 40
 
 ```
 
-  5. The 10 most frequent sequences
-
-```{r}
-# 5 - 10 most frequent sequences
-
-seqtab(df.seq)
-
-```
-
-  6. Plot of all the sequences
-
-```{r}
-# 6 - Plot of sequences
-
-seqIplot(df.seq)
-```
-
-# 2. Calculate life course dissimilarities in the data
+# Calculate life course dissimilarities in the data
 
 To compute the life course dissimilarities based on the data we are using, we applied a data-driven approach to compute the indel and similarity matrix, based on the transition matrix to assign the transition costs.
 
@@ -186,11 +170,11 @@ dist.om <- seqdist(
 )
 ```
 
-# 3. Use a clustering methods to derive typical trajectories and describe groups
+# Use a clustering methods to derive typical trajectories and describe groups
 
 First, let's analyze the clustering distance distribution based on different number of clusters.
 
-```{r,eval=FALSE}
+```{r,eval=FALSE, include=FALSE}
 
 # aglomerative nesting. it is a way to create a cluster based on different methods
 
@@ -202,7 +186,7 @@ clusterward <-  agnes(
 
 ```
 
-```{r}
+```{r,echo = FALSE}
 # dendrogram analysis
 
 wardClust <- hclust(as.dist(dist.om), method = "ward.D2")
@@ -247,8 +231,7 @@ indicators_plot <- avgClustQual$stats |>
   ) |>
   ggplot() +
   aes(x = cluster, y = ind_value, group = ind_name, color = ind_name) +
-  geom_line(linewidth = 1.1) +
-  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
   scale_color_brewer(palette = "Set3") +
   labs(
     y = "Indicator"
@@ -284,8 +267,7 @@ indicators2_plot <- avgClustQual$stats |>
   filter(!is.na(diff_value)) |>
   ggplot() +
   aes(x = cluster, y = diff_value, group = ind_name, color = ind_name) +
-  geom_line(linewidth = 1.1) +
-  geom_point(size = 3) +
+  geom_line(linewidth = 1,show.legend = FALSE) +
   scale_color_brewer(palette = "Set3") +
   labs(
     y = "First derivative of Indicators"
@@ -299,12 +281,16 @@ indicators2_plot <- avgClustQual$stats |>
 
 plot_dend_stat <- dendro_plot + indicators_plot + indicators2_plot
 
+```
+
+```{r,echo = FALSE}
 plot_dend_stat
 ```
 
-Based on the statistic indicators PBC and HG, we the best number of clusters to be chosen is 5.
 
-```{r choosing-number-of-clusters}
+Based on the statistic indicators PBC and HG, the best number of clusters to be chosen is 5.
+
+```{r choosing-number-of-clusters,echo = FALSE}
 
 
 clusters5 = cutree(clusterward, k = 5) # choosing the number of clusters
@@ -340,13 +326,9 @@ To describe the groups, let's plot the distribution of trajectories, based on ea
 ![Trajectories for each cluster](images/trajectories_clusters.jpeg){fig-align="center" width="100%"}
 
 
-#4. (Optional) Describe group differences in the the distribution of life course clusters
+# (Optional) Describe group differences in the the distribution of life course clusters
 
-For describing group differences in the distribution of life course by cluster, we can use different measures. Here we will use two of them: duration on each state and distribution of states over life course.
-
-  - Duration on each state by cluster
-
-![Duration on each state by cluster](images/duration_clusters.jpeg){fig-align="center" width="100%"}
+For describing group differences in the distribution of life course by cluster, we can use different measures. Here we will use the distribution of states over life course.
 
   - Distribution of states over life course by cluster
 
